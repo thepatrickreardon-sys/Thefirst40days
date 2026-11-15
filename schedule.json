@@ -15,25 +15,27 @@
  },
  "events": [
   {
-   "id": "v6628up4mb8",
-   "kind": "help",
+   "id": "need-yhdqcto4f1r",
+   "kind": "open",
    "date": "2026-11-16",
    "start": "07:00",
    "dur": 180,
    "cat": "talulah",
    "label": "Time with Talulah",
-   "who": "Patrick"
+   "priority": false,
+   "spots": 1
   },
   {
-   "id": "ixgkiqx4zjm",
-   "kind": "help",
+   "id": "need-xt4t76c4vy6",
+   "kind": "open",
    "date": "2026-11-18",
    "start": "10:00",
    "dur": 120,
    "cat": "cleaning",
    "label": "Tidy & clean",
-   "who": "Patrick"
+   "priority": false,
+   "spots": 1
   }
  ],
- "updated": "2026-11-15T04:24:41Z"
+ "updated": "2026-11-15T12:02:42Z"
 }
