@@ -34,8 +34,8 @@ const authApi={
     if(u&&u.isAnonymous){try{return await linkWithPopup(u,p)}catch(e){if(e.code==="auth/credential-already-in-use"||e.code==="auth/email-already-in-use")return signInWithPopup(auth,p);throw e}}
     return signInWithPopup(auth,p)},
   async sendLink(email){await sendSignInLinkToEmail(auth,email,{url:location.origin+location.pathname,handleCodeInApp:true});try{localStorage.setItem(EMAIL_KEY,email)}catch(_){}},
-  async finishLink(askEmail){if(!isSignInWithEmailLink(auth,location.href))return false;let email="";try{email=localStorage.getItem(EMAIL_KEY)||""}catch(_){}
-    if(!email)email=await askEmail();if(!email)return false;const href=location.href;history.replaceState(null,"",location.pathname+location.hash);
+  async finishLink(askEmail,pasted){const src=pasted||location.href;if(!isSignInWithEmailLink(auth,src))return false;let email="";try{email=localStorage.getItem(EMAIL_KEY)||""}catch(_){}
+    if(!email)email=await askEmail();if(!email)return false;const href=src;if(!pasted)history.replaceState(null,"",location.pathname+location.hash);
     const u=auth.currentUser;
     if(u&&u.isAnonymous){try{await linkWithCredential(u,EmailAuthProvider.credentialWithLink(email,href))}catch(e){if(e.code==="auth/credential-already-in-use"||e.code==="auth/email-already-in-use")await signInWithEmailLink(auth,email,href);else throw e}}
     else await signInWithEmailLink(auth,email,href);
@@ -811,7 +811,9 @@ function accountCard(){const u=S.authUser;
   if(u&&!u.isAnonymous)return`<section><div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Signed in</b><div class="small muted">${esc(u.email||"")}${S.isAdmin?" · can manage Elena's tab":""}</div></div><button class="btn ghost sm" data-act="signout">Sign out</button></div></section>`;
   return`<section><div class="card"><div class="admin-h"><h3>Your account</h3></div>
    <p class="small muted" style="margin:-6px 0 12px">You're signed up as a guest on this device, so no account is needed. Sign in only if you want your shifts on more than one device, or if you're Elena or Patrick.</p>
-   <div class="calrow"><button class="btn ghost sm" data-act="google">Sign in with Google</button><button class="btn ghost sm" data-act="emaillink">Sign in with email link</button></div></div></section>`}
+   <div class="calrow"><button class="btn ghost sm" data-act="google">Sign in with Google</button><button class="btn ghost sm" data-act="emaillink">Sign in with email link</button></div>
+   <p class="small muted" style="margin:12px 0 0">Using the app from your Home Screen icon on iPhone? Use <b>Sign in with email link</b>, then come back here and tap <b>Paste link</b>.</p>
+   <div class="calrow" style="margin-top:8px"><button class="btn ghost sm" data-act="pastelink">Paste link</button></div></div></section>`}
 function elenaView(){
   if(!S.isAdmin)return`<div class="empty">This page is just for Elena.</div>`;
   const st=S.settings,m=st.meals,t=today();
@@ -929,8 +931,9 @@ function showCopy(txt){openSheet(sheetHead("Copy this","Select the text and copy
 document.addEventListener("click",async e=>{
   const a=e.target.closest("[data-act]");if(!e.target.closest("#pop")&&!(a&&(a.dataset.act==="selday"||a.dataset.act==="mealday"||a.dataset.act==="myday"||a.dataset.act==="anotherday")))closePop();if(!a)return;const act=a.dataset.act;if(a.closest("#pop")&&act!=="closepop")closePop();
   if(act==="close"){closeSheet();return}
-  if(act==="google"){try{await FB.auth.google();await onUser(FB.auth.current());closeSheet();toast("Signed in")}catch(e){if(e&&e.code!=="auth/popup-closed-by-user")toast("Google sign-in didn't finish — try again.")}return}
+  if(act==="google"){try{await FB.auth.google();await onUser(FB.auth.current());closeSheet();toast("Signed in")}catch(e){if(e&&e.code!=="auth/popup-closed-by-user")toast("Google sign-in didn't finish. On the Home Screen app, use Sign in with email link instead.")}return}
   if(act==="emaillink"){openSheet(sheetHead("Sign in with email","We'll email you a sign-in link — no password.")+`<form novalidate data-form="sendlink" class="form"><div class="field"><label class="lbl">Your email</label><input name="email" type="email" required placeholder="you@example.com" autocomplete="email"></div><button class="btn primary block" type="submit">Email me a link</button></form>`);return}
+  if(act==="pastelink"){openSheet(sheetHead("Paste your sign-in link","Press and hold the link in the email, tap Copy Link, then paste it here.")+`<form novalidate data-form="pastelink" class="form"><div class="field"><input name="link" type="url" required placeholder="https://…"></div><button class="btn primary block" type="submit">Sign in</button></form>`);return}
   if(act==="signout"){await FB.auth.signOut();toast("Signed out");return}
   if(act==="rmadmin"){try{await S.db.doc("admins/"+a.dataset.email).delete();toast("Removed")}catch(e){handleErr(e)}return}
   if(act==="tab"){closeSheet();S.tab=a.dataset.tab;render();window.scrollTo({top:0,behavior:"smooth"});return}
@@ -978,7 +981,8 @@ document.addEventListener("submit",async e=>{
     toast(bad.name==="pname"?"Please add your name first ✍️":bad.type==="email"?"Please enter a valid email":bad.name==="dish"?"Tell us what you're bringing":"Please fill in the highlighted box",3200);return}
   const fd=new FormData(f);const btn=f.querySelector('[type="submit"]');let label="";if(btn){btn.disabled=true;label=btn.textContent;btn.textContent="Saving…"}
   try{
-    if(kind==="sendlink"){const em=String(fd.get("email")||"").trim();await FB.auth.sendLink(em);openSheet(sheetHead("Check your email 📬",`We sent a sign-in link to <b>${esc(em)}</b>.`)+`<p class="muted">Open it on this device and you'll be signed in. If you don't see it in a minute, check your spam or junk folder.</p><button class="btn ghost block" data-act="close">OK</button>`);return}
+    if(kind==="pastelink"){const l=String(fd.get("link")||"").trim();closeSheet();try{const ok=await FB.auth.finishLink(askEmail,l);if(!ok){toast("That doesn't look like the sign-in link — copy it from the email again.");return}await onUser(FB.auth.current());toast("You're signed in 💛");render()}catch(e){console.warn(e);toast("That link didn't work — it may have expired. Send a new one.")}return}
+    if(kind==="sendlink"){const em=String(fd.get("email")||"").trim();await FB.auth.sendLink(em);openSheet(sheetHead("Check your email 📬",`We sent a sign-in link to <b>${esc(em)}</b>.`)+`<p class="muted">If you're in Safari, just tap the link in the email. If you're using the Home Screen icon, press and hold the link in the email, tap <b>Copy Link</b>, then come back here and tap <b>Paste link</b> under My Shifts. Not there in a minute? Check Junk.</p><button class="btn primary block" data-act="pastelink">Paste link</button><button class="btn ghost block" style="margin-top:8px" data-act="close">OK</button>`);return}
     if(kind==="admin"){const em=String(fd.get("email")||"").trim().toLowerCase();if(!em)return;await S.db.doc("admins/"+em).set({addedAt:Date.now()});f.reset();toast("Added — they'll get Elena's tab after signing in with that email");return}
     if(kind==="help"){const item={id:uid(),kind:"help",cat:fd.get("cat")||"other",title:String(fd.get("title")||"").trim(),date:fd.get("date"),start:fd.get("start"),dur:+fd.get("dur")||60,note:String(fd.get("note")||"").trim(),at:Date.now()};
       await saveMine(d=>{applyName(d,fd);d.items.push(item);return d});successSheet(item)}
@@ -1013,7 +1017,8 @@ function subscribeAdminData(){
 }
 async function onUser(u){
   S.authUser=u;S.me={id:u?u.uid:null,name:(u&&u.displayName)||""};
-  const email=(u&&!u.isAnonymous&&u.emailVerified!==false&&u.email||"").toLowerCase();
+  const pd=(u&&u.providerData)||[];
+  const email=(u&&!u.isAnonymous&&(u.email||(pd.find(x=>x&&x.email)||{}).email)||"").toLowerCase();
   S.isAdmin=!!email&&(OWNER_EMAILS.includes(email)||S.admins.includes(email));
   if(!S.isAdmin&&S.tab==="elena")S.tab="home";
   S.myContact="";if(u){S.db.doc("contacts/"+u.uid).get().then(d=>{S.myContact=(d.exists&&d.data().phone)||"";render()}).catch(()=>{})}
