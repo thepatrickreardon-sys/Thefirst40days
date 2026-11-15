@@ -807,7 +807,9 @@ function mineView(){
    <div class="field"><label class="lbl">Phone <span class="opt">optional</span></label><input name="pphone" type="tel" value="${esc(me.phone||"")}" placeholder="So Elena can text you"></div></div>
    <div><button class="btn ghost" type="submit">Save</button></div></form></div></section>`;
   return h}
-function accountCard(){const u=S.authUser;
+const APP_VER="Nov 15 · v3";
+function accountCard(){return accountCard0()+`<p class="small muted" style="text-align:center;margin:6px 0 0">App version ${APP_VER}${S.authUser?(S.authUser.isAnonymous?" · guest":" · "+esc((S.authUser.email||((S.authUser.providerData||[]).find(x=>x&&x.email)||{}).email||"no email")))+(S.isAdmin?" · manager":""):" · not connected"}</p>`}
+function accountCard0(){const u=S.authUser;
   if(u&&!u.isAnonymous)return`<section><div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Signed in</b><div class="small muted">${esc(u.email||"")}${S.isAdmin?" · can manage Elena's tab":""}</div></div><button class="btn ghost sm" data-act="signout">Sign out</button></div></section>`;
   return`<section><div class="card"><div class="admin-h"><h3>Your account</h3></div>
    <p class="small muted" style="margin:-6px 0 12px">You're signed up as a guest on this device, so no account is needed. Sign in only if you want your shifts on more than one device, or if you're Elena or Patrick.</p>
