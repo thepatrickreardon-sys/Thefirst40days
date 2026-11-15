@@ -144,6 +144,7 @@ def main(path):
         "babyName": settings.get("babyName") or "",
         "family": settings.get("family") or "",
         "welcome": settings.get("welcome") or "",
+        "visitNotes": settings.get("visitNotes") or "",
         "meals": {"enabled": meals.get("enabled", True), "types": meals.get("types") or ["dinner"],
                   "every": int(meals.get("every") or 1), "dropoff": meals.get("dropoff") or ""},
         "events": sorted(pub, key=lambda e: (e["date"], e["start"])),
