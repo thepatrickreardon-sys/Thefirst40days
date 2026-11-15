@@ -15,7 +15,7 @@
 // Firebase adapter: exposes window.FB with a tiny db/auth API the app uses.
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {getFirestore,doc,collection,setDoc,updateDoc,deleteDoc,onSnapshot,getDoc} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import {getAuth,onAuthStateChanged,signInAnonymously,GoogleAuthProvider,signInWithPopup,linkWithPopup,signOut,sendSignInLinkToEmail,isSignInWithEmailLink,signInWithEmailLink,EmailAuthProvider,linkWithCredential} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {getAuth,onIdTokenChanged,onAuthStateChanged,signInAnonymously,GoogleAuthProvider,signInWithPopup,linkWithPopup,signOut,sendSignInLinkToEmail,isSignInWithEmailLink,signInWithEmailLink,EmailAuthProvider,linkWithCredential} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 const app=initializeApp({apiKey:"AIzaSyCJwd0Kl_XaSE4T3k-3JjlsBXC-brNdFCY",authDomain:"thefirst40days-2656f.firebaseapp.com",projectId:"thefirst40days-2656f",storageBucket:"thefirst40days-2656f.firebasestorage.app",messagingSenderId:"361920828748",appId:"1:361920828748:web:4668b0834500a2cabaabe9"});
 const fs=getFirestore(app),auth=getAuth(app);
 const wrapDoc=d=>({id:d.id,exists:d.exists(),data:()=>d.data(),metadata:d.metadata});
@@ -28,7 +28,7 @@ const db={
 const EMAIL_KEY="f40-email-for-link";
 const authApi={
   current:()=>auth.currentUser,
-  onChange:cb=>onAuthStateChanged(auth,cb),
+  onChange:cb=>onIdTokenChanged(auth,cb),
   guest:()=>signInAnonymously(auth),
   async google(){const p=new GoogleAuthProvider();const u=auth.currentUser;
     if(u&&u.isAnonymous){try{return await linkWithPopup(u,p)}catch(e){if(e.code==="auth/credential-already-in-use"||e.code==="auth/email-already-in-use")return signInWithPopup(auth,p);throw e}}
@@ -928,7 +928,7 @@ function showCopy(txt){openSheet(sheetHead("Copy this","Select the text and copy
 document.addEventListener("click",async e=>{
   const a=e.target.closest("[data-act]");if(!e.target.closest("#pop")&&!(a&&(a.dataset.act==="selday"||a.dataset.act==="mealday"||a.dataset.act==="myday"||a.dataset.act==="anotherday")))closePop();if(!a)return;const act=a.dataset.act;if(a.closest("#pop")&&act!=="closepop")closePop();
   if(act==="close"){closeSheet();return}
-  if(act==="google"){try{await FB.auth.google();closeSheet();toast("Signed in")}catch(e){if(e&&e.code!=="auth/popup-closed-by-user")toast("Google sign-in didn't finish — try again.")}return}
+  if(act==="google"){try{await FB.auth.google();await onUser(FB.auth.current());closeSheet();toast("Signed in")}catch(e){if(e&&e.code!=="auth/popup-closed-by-user")toast("Google sign-in didn't finish — try again.")}return}
   if(act==="emaillink"){openSheet(sheetHead("Sign in with email","We'll email you a sign-in link — no password.")+`<form data-form="sendlink" class="form"><div class="field"><label class="lbl">Your email</label><input name="email" type="email" required placeholder="you@example.com" autocomplete="email"></div><button class="btn primary block" type="submit">Email me a link</button></form>`);return}
   if(act==="signout"){await FB.auth.signOut();toast("Signed out");return}
   if(act==="rmadmin"){try{await S.db.doc("admins/"+a.dataset.email).delete();toast("Removed")}catch(e){handleErr(e)}return}
@@ -1024,7 +1024,7 @@ function boot(){
     db.collection("people").onSnapshot(q=>{S.people=Object.fromEntries(q.docs.map(d=>{const v=clone(d.data());(v.items||[]).forEach(fixCat);return[d.id,v]}));done("p")},fail);
     db.collection("admins").onSnapshot(q=>{S.admins=q.docs.map(d=>d.id.toLowerCase());if(S.authUser)onUser(S.authUser)},()=>{});
     FB.auth.onChange(u=>{if(!u){FB.auth.guest().catch(e=>{console.warn(e);toast("Couldn't connect — check your connection.")});return}onUser(u)});
-    FB.auth.finishLink(askEmail).then(ok=>{if(ok){toast("You're signed in 💛");S.tab="mine";render()}}).catch(e=>{console.warn(e);toast("That sign-in link didn't work — it may have expired. Try again.")});
+    FB.auth.finishLink(askEmail).then(async ok=>{if(ok){await onUser(FB.auth.current());toast("You're signed in 💛");S.tab="mine";render()}}).catch(e=>{console.warn(e);toast("That sign-in link didn't work — it may have expired. Try again.")});
   };
   if(window.FB)go();else window.addEventListener("fb-ready",go,{once:true});
   if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
