@@ -4,7 +4,7 @@
  "babyName": "",
  "family": "Elena · Patrick · Talulah · baby",
  "welcome": "",
- "visitNotes": "",
+ "visitNotes": "Please wash your hands when you arrive.\nIf you're feeling even a little sick, please sit this one out.\nNo need to be entertained — help yourself to whatever you need.\nKeep visits gentle and short unless Elena asks you to stay.",
  "meals": {
   "enabled": true,
   "types": [
@@ -35,5 +35,5 @@
    "who": "Patrick"
   }
  ],
- "updated": "2026-11-15T03:40:26Z"
+ "updated": "2026-11-15T04:24:41Z"
 }
