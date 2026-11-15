@@ -55,6 +55,16 @@
    "who": "Patrick"
   },
   {
+   "id": "dcszvergd30",
+   "kind": "help",
+   "date": "2026-11-23",
+   "start": "10:00",
+   "dur": 120,
+   "cat": "baby",
+   "label": "Hold the baby",
+   "who": "Patrick"
+  },
+  {
    "id": "hc46l1997kn",
    "kind": "help",
    "date": "2026-12-04",
@@ -65,5 +75,5 @@
    "who": "Patrick"
   }
  ],
- "updated": "2026-11-15T14:04:55Z"
+ "updated": "2026-11-15T14:56:52Z"
 }
