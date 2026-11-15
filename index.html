@@ -276,6 +276,7 @@ section{margin-top:26px}
 .lbl{display:block;font-weight:600;font-size:14px;margin-bottom:6px;color:var(--ink2)}
 .field input,.field select,.field textarea{width:100%;border:1px solid var(--line2);background:#fff;border-radius:13px;padding:11px 13px;font-size:16px;outline:none;transition:border .15s,box-shadow .15s}
 .field textarea{resize:vertical;min-height:70px}
+.field input.err{border-color:var(--rose);box-shadow:0 0 0 3px var(--rose-s);background:#FFF8F5}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--rose);box-shadow:0 0 0 3px var(--rose-s)}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:460px){.two{grid-template-columns:1fr}}
@@ -432,14 +433,14 @@ function handleErr(e){
   console.warn(e);const c=e&&e.code;
   if(c==="permission-denied")toast("That change isn't allowed from this account.",4000);
   else if(c==="resource-exhausted")toast("Too many changes at once — try again in a minute.");
-  else toast("That didn't save — check your connection and try again.");
-  throw e;
+  else toast("That didn't save"+(c?" ("+c+")":"")+" — check your connection and try again.",4500);
+  try{e._shown=true}catch(_){}throw e;
 }
 const store={
   async setSettings(s){if(S.live){try{await S.db.doc("settings/main").set(s)}catch(e){handleErr(e)}}else{S.settings=merge(DEFAULTS,s);render()}},
   async setNeed(n){const {id,...body}=n;if(S.live){try{await S.db.doc("needs/"+id).set(body)}catch(e){handleErr(e)}}else{S.needs=S.needs.filter(x=>x.id!==id).concat([n]);render()}},
   async delNeed(id){if(S.live){try{await S.db.doc("needs/"+id).delete()}catch(e){handleErr(e)}}else{S.needs=S.needs.filter(x=>x.id!==id);render()}},
-  async setPerson(u,doc){if(S.live){try{await S.db.doc("people/"+u).set(doc)}catch(e){handleErr(e)}}else{S.people[u]=doc;render()}}
+  async setPerson(u,doc){if(S.live){try{await Promise.race([S.db.doc("people/"+u).set(doc),new Promise(r=>setTimeout(r,6000))])}catch(e){handleErr(e)}}else{S.people[u]=doc;render()}}
 };
 function saveMine(fn){
   const p=writeQ.then(async()=>{const next=fn(clone(mine()));next.items=next.items||[];next.updatedAt=Date.now();
@@ -802,7 +803,7 @@ function mineView(){
   if(past.length)h+=`<section><div class="sec-h"><h2>Thank you for these</h2><span class="aside">${past.length} done</span></div><div class="stack">${past.map(i=>itemRow(i,{showDate:true})).join("")}</div></section>`;
   h+=accountCard();
   h+=`<section><div class="card"><div class="admin-h"><h3>About you</h3></div>
-   <form data-form="profile" class="form"><div class="two"><div class="field"><label class="lbl">Your name</label><input name="pname" required value="${esc(me.name||S.me.name||"")}" placeholder="How Elena knows you"></div>
+   <form novalidate data-form="profile" class="form"><div class="two"><div class="field"><label class="lbl">Your name</label><input name="pname" required value="${esc(me.name||S.me.name||"")}" placeholder="How Elena knows you"></div>
    <div class="field"><label class="lbl">Phone <span class="opt">optional</span></label><input name="pphone" type="tel" value="${esc(me.phone||"")}" placeholder="So Elena can text you"></div></div>
    <div><button class="btn ghost" type="submit">Save</button></div></form></div></section>`;
   return h}
@@ -821,7 +822,7 @@ function elenaView(){
   h+=`<section><div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>📅 Family calendar for home</b><div class="small muted">Every helper, meal and open request in one file for Apple Calendar. Download again anytime to update.</div></div><button class="btn primary sm" data-act="icsfamily">${ICON_A} Download for Apple Calendar</button></div></section>`;
   // add request
   h+=`<section><div class="card"><div class="admin-h"><span class="n">1</span><h3>Ask for help</h3></div>
-   <form data-form="need" class="form">
+   <form novalidate data-form="need" class="form">
     <div class="catgrid">${Object.entries(CATS).map(([k,c],ix)=>`<label class="catopt"><input type="radio" name="cat" value="${k}" ${ix===0?"checked":""}><span class="ci">${c.icon}</span><span class="cl">${c.label}</span></label>`).join("")}</div>
     <div class="field"><label class="lbl">What exactly? <span class="opt">optional</span></label><input name="title" placeholder="e.g. Take Talulah to the park so I can nap"></div>
     <div class="two"><div class="field"><label class="lbl">Starting</label>${allDaySelect("date",def)}</div><div class="field"><label class="lbl">Repeat</label><select name="repeat"><option value="once">Just this day</option><option value="daily">Every day</option><option value="alt">Every other day</option><option value="weekdays">Weekdays</option><option value="weekly">Once a week</option></select></div></div>
@@ -837,7 +838,7 @@ function elenaView(){
     <div class="ra"><button class="iconbtn ${n.priority?"on":""}" data-act="pri" data-id="${esc(n.id)}" title="Toggle priority">★</button><button class="iconbtn" data-act="delneed" data-id="${esc(n.id)}" title="Remove">🗑</button></div></div>`}).join(""):`<div class="empty">No requests yet. Add one above.</div>`)+`</div></section>`;
   // dates & family
   h+=`<section><div class="card"><div class="admin-h"><span class="n">2</span><h3>Dates & family</h3></div>
-   <form data-form="settings" class="form">
+   <form novalidate data-form="settings" class="form">
     <div class="two"><div class="field"><label class="lbl">Baby's arrival (or due) date</label><input type="date" name="startDate" value="${esc(st.startDate)}"></div><div class="field"><label class="lbl">Baby's name <span class="opt">optional</span></label><input name="babyName" value="${esc(st.babyName)}" placeholder="When you're ready to share"></div></div>
     <label class="toggle"><input type="checkbox" name="born" ${st.born?"checked":""}><div><b>Baby has arrived</b><small>Day 1 is the birthday — the 40 days count from there</small></div></label>
     <div class="field"><label class="lbl">Family line under the title</label><input name="family" value="${esc(st.family)}"></div>
@@ -848,7 +849,7 @@ function elenaView(){
     <button class="btn primary block" type="submit">Save</button></form></div></section>`;
   // meals settings
   h+=`<section><div class="card"><div class="admin-h"><span class="n">3</span><h3>Meal train</h3></div>
-   <form data-form="meals" class="form">
+   <form novalidate data-form="meals" class="form">
     <label class="toggle"><input type="checkbox" name="enabled" ${m.enabled?"checked":""}><div><b>Meal train is on</b><small>People can sign up to bring meals</small></div></label>
     <div><label class="lbl">Which meals?</label><div class="durs">${Object.entries(MEALTYPES).map(([k,l])=>`<label><input type="checkbox" name="types" value="${k}" ${(m.types||[]).includes(k)?"checked":""}><span>${l}</span></label>`).join("")}</div></div>
     <div class="two"><div class="field"><label class="lbl">How often?</label><select name="every"><option value="1" ${+m.every===1?"selected":""}>Every day</option><option value="2" ${+m.every===2?"selected":""}>Every other day</option><option value="3" ${+m.every===3?"selected":""}>Every third day</option></select></div>
@@ -863,7 +864,7 @@ function elenaView(){
    <p class="small muted" style="margin:-6px 0 10px">Patrick and Elena always can. Add someone else's email and they'll get this tab after signing in with that email.</p>
    <div class="stack">${OWNER_EMAILS.map(e=>`<div class="row" style="padding:10px 12px"><div class="rb"><div class="rt" style="font-size:14.5px">${esc(e)}</div></div><span class="badge ok">Owner</span></div>`).join("")}
    ${S.admins.filter(e=>!OWNER_EMAILS.includes(e)).map(e=>`<div class="row" style="padding:10px 12px"><div class="rb"><div class="rt" style="font-size:14.5px">${esc(e)}</div></div><button class="iconbtn" data-act="rmadmin" data-email="${esc(e)}" title="Remove">🗑</button></div>`).join("")}</div>
-   <form data-form="admin" class="form" style="margin-top:12px;flex-direction:row;gap:8px"><div class="field" style="flex:1"><input name="email" type="email" required placeholder="name@example.com"></div><button class="btn primary" type="submit">Add</button></form></div></section>`;
+   <form novalidate data-form="admin" class="form" style="margin-top:12px;flex-direction:row;gap:8px"><div class="field" style="flex:1"><input name="email" type="email" required placeholder="name@example.com"></div><button class="btn primary" type="submit">Add</button></form></div></section>`;
   // everyone's signups
   h+=`<section><div class="sec-h"><h2>Everyone signed up</h2><span class="aside">${signups.length} upcoming</span></div><div class="stack">`+
    (signups.length?signups.map(i=>{const p={phone:(S.contacts[i.uid]||{}).phone};return itemRow(i,{showDate:true,actions:`<div class="ra">${p.phone?`<span class="small muted">${esc(p.phone)}</span>`:""}<button class="iconbtn" data-act="rmitem" data-id="${esc(i.id)}" data-uid="${esc(i.uid)}" title="Remove">🗑</button></div>`})}).join(""):`<div class="empty">No sign-ups yet.</div>`)+`</div></section>`;
@@ -881,7 +882,7 @@ function render(){
 function helpSheet(date,cat){
   if(!guardWrite())return;
   openSheet(sheetHead("Offer a helping hand","Pick what you'd like to do and when. You'll be able to add it to your calendar.")+
-  `<form data-form="help" class="form">
+  `<form novalidate data-form="help" class="form">
    <div class="catgrid">${Object.entries(CATS).map(([k,c])=>`<label class="catopt"><input type="radio" name="cat" value="${k}" ${k===(cat||"talulah")?"checked":""}><span class="ci">${c.icon}</span><span class="cl">${c.label}</span><span class="ch">${c.hint}</span></label>`).join("")}</div>
    <div class="field"><label class="lbl">In a few words <span class="opt">optional</span></label><input name="title" maxlength="80" placeholder="e.g. Playground + lunch with Talulah"></div>
    <div class="two"><div class="field"><label class="lbl">Day</label>${daySelect("date",date)}</div><div class="field"><label class="lbl">Start time</label>${timeSelect("start","10:00")}</div></div>
@@ -895,7 +896,7 @@ function claimSheet(id){
   openSheet(sheetHead(`${c.icon} ${esc(n.title||c.label)}`,`${fmtDate(n.date,{weekday:"long",month:"long",day:"numeric"})} · ${fmtRange(n.start,n.dur)}`)+
   (n.priority?`<div class="banner" style="background:var(--rose-s);color:var(--rose-d);margin:0 0 14px"><span>★</span><div>This is one of Elena's priorities — thank you!</div></div>`:"")+
   (n.note?`<div class="note" style="margin-bottom:14px"><h4>From Elena</h4><p>${esc(n.note)}</p></div>`:"")+
-  `<form data-form="claim" class="form"><input type="hidden" name="id" value="${esc(n.id)}">
+  `<form novalidate data-form="claim" class="form"><input type="hidden" name="id" value="${esc(n.id)}">
    <div class="field"><label class="lbl">Note back <span class="opt">optional</span></label><textarea name="note" rows="2" maxlength="400" placeholder="e.g. I'll bring snacks for Talulah"></textarea></div>
    ${nameFields()}<button class="btn primary block" type="submit">I'll do it</button></form>`)}
 function mealSheet(date,type){
@@ -907,7 +908,7 @@ function mealSheet(date,type){
   const dt=type==="lunch"?"12:00":type==="breakfast"?"08:00":"17:00";
   openSheet(sheetHead("🥘 Bring a meal","Thank you! Here's what helps.")+
   `<div class="notes" style="margin:0 0 16px">${m.allergies?`<div class="note alert"><h4>⚠️ Allergies</h4><p>${esc(m.allergies)}</p></div>`:""}${m.household?`<div class="note"><h4>Feeding</h4><p>${esc(m.household)}</p></div>`:""}${m.loves?`<div class="note"><h4>We love</h4><p>${esc(m.loves)}</p></div>`:""}${m.dropoff?`<div class="note"><h4>Drop-off</h4><p>${esc(m.dropoff)}</p></div>`:""}</div>
-  <form data-form="meal" class="form">
+  <form novalidate data-form="meal" class="form">
    <div class="field"><label class="lbl">Which day?</label><select name="slot">${opts}</select></div>
    <div class="field"><label class="lbl">What are you bringing?</label><input name="dish" required maxlength="80" placeholder="e.g. Chicken soup + bread"></div>
    <div class="field"><label class="lbl">Drop-off around</label>${timeSelect("start",dt)}</div>
@@ -929,7 +930,7 @@ document.addEventListener("click",async e=>{
   const a=e.target.closest("[data-act]");if(!e.target.closest("#pop")&&!(a&&(a.dataset.act==="selday"||a.dataset.act==="mealday"||a.dataset.act==="myday"||a.dataset.act==="anotherday")))closePop();if(!a)return;const act=a.dataset.act;if(a.closest("#pop")&&act!=="closepop")closePop();
   if(act==="close"){closeSheet();return}
   if(act==="google"){try{await FB.auth.google();await onUser(FB.auth.current());closeSheet();toast("Signed in")}catch(e){if(e&&e.code!=="auth/popup-closed-by-user")toast("Google sign-in didn't finish — try again.")}return}
-  if(act==="emaillink"){openSheet(sheetHead("Sign in with email","We'll email you a sign-in link — no password.")+`<form data-form="sendlink" class="form"><div class="field"><label class="lbl">Your email</label><input name="email" type="email" required placeholder="you@example.com" autocomplete="email"></div><button class="btn primary block" type="submit">Email me a link</button></form>`);return}
+  if(act==="emaillink"){openSheet(sheetHead("Sign in with email","We'll email you a sign-in link — no password.")+`<form novalidate data-form="sendlink" class="form"><div class="field"><label class="lbl">Your email</label><input name="email" type="email" required placeholder="you@example.com" autocomplete="email"></div><button class="btn primary block" type="submit">Email me a link</button></form>`);return}
   if(act==="signout"){await FB.auth.signOut();toast("Signed out");return}
   if(act==="rmadmin"){try{await S.db.doc("admins/"+a.dataset.email).delete();toast("Removed")}catch(e){handleErr(e)}return}
   if(act==="tab"){closeSheet();S.tab=a.dataset.tab;render();window.scrollTo({top:0,behavior:"smooth"});return}
@@ -969,7 +970,13 @@ document.addEventListener("click",async e=>{
 });
 function applyName(d,fd){if(fd.has("pname")){d.name=String(fd.get("pname")).trim().slice(0,60);d.phone=String(fd.get("pphone")||"").trim().slice(0,30)}return d}
 document.addEventListener("submit",async e=>{
-  e.preventDefault();const f=e.target,fd=new FormData(f),kind=f.dataset.form;const btn=f.querySelector('[type="submit"]');if(btn)btn.disabled=true;
+  e.preventDefault();const f=e.target,kind=f.dataset.form;
+  if(!kind||kind==="confirmemail")return;
+  f.querySelectorAll(".err").forEach(x=>x.classList.remove("err"));
+  const bad=[...f.querySelectorAll("input,select,textarea")].find(x=>!x.checkValidity()||(x.required&&!String(x.value).trim()));
+  if(bad){bad.classList.add("err");bad.scrollIntoView({behavior:"smooth",block:"center"});setTimeout(()=>bad.focus(),250);
+    toast(bad.name==="pname"?"Please add your name first ✍️":bad.type==="email"?"Please enter a valid email":bad.name==="dish"?"Tell us what you're bringing":"Please fill in the highlighted box",3200);return}
+  const fd=new FormData(f);const btn=f.querySelector('[type="submit"]');let label="";if(btn){btn.disabled=true;label=btn.textContent;btn.textContent="Saving…"}
   try{
     if(kind==="sendlink"){const em=String(fd.get("email")||"").trim();await FB.auth.sendLink(em);openSheet(sheetHead("Check your email 📬",`We sent a sign-in link to <b>${esc(em)}</b>.`)+`<p class="muted">Open it on this device and you'll be signed in. If you don't see it in a minute, check your spam or junk folder.</p><button class="btn ghost block" data-act="close">OK</button>`);return}
     if(kind==="admin"){const em=String(fd.get("email")||"").trim().toLowerCase();if(!em)return;await S.db.doc("admins/"+em).set({addedAt:Date.now()});f.reset();toast("Added — they'll get Elena's tab after signing in with that email");return}
@@ -990,13 +997,13 @@ document.addEventListener("submit",async e=>{
         if(rep==="daily"||(rep==="alt"&&i%2===0)||(rep==="weekdays"&&wd>0&&wd<6)||(rep==="weekly"&&i%7===0))ds.push(d)}}
       for(const d of ds)await store.setNeed({id:uid(),...base,date:d,at:Date.now()});
       f.reset();toast(ds.length>1?`Posted ${ds.length} requests`:"Request posted")}
-  }catch(_){}finally{if(btn)btn.disabled=false}
+  }catch(err){if(!(err&&err._shown)){console.warn(err);toast("Something went wrong"+(err&&err.code?" ("+err.code+")":"")+" — please try again.",4500)}}finally{if(btn){btn.disabled=false;if(label)btn.textContent=label}}
 });
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeSheet();closePop()}});
 
 /* ---------- boot ---------- */
 async function refreshProfiles(){}
-function askEmail(){return new Promise(res=>{openSheet(sheetHead("Confirm your email","For security, type the email you asked the link for.")+`<form data-form="confirmemail" class="form"><div class="field"><input name="email" type="email" required autocomplete="email"></div><button class="btn primary block" type="submit">Sign in</button></form>`);
+function askEmail(){return new Promise(res=>{openSheet(sheetHead("Confirm your email","For security, type the email you asked the link for.")+`<form novalidate data-form="confirmemail" class="form"><div class="field"><input name="email" type="email" required autocomplete="email"></div><button class="btn primary block" type="submit">Sign in</button></form>`);
   const f=$("#sheet form");f.addEventListener("submit",e=>{e.preventDefault();e.stopImmediatePropagation();res(String(new FormData(f).get("email")||"").trim());closeSheet()},{capture:true,once:true})})}
 let subs=[];
 function subscribeAdminData(){
