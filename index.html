@@ -1,3 +1,197 @@
-<!DOCTYPE html><html><head><meta charset="utf-8"><title>The First 40 Days</title></head>
-<body style="font-family:system-ui;max-width:520px;margin:60px auto;padding:0 20px;color:#2D2622">
-<h1>The First 40 Days</h1><p>This site only hosts a calendar feed for family and friends. Use the link shared in the app.</p></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The First 40 Days</title>
+<meta name="description" content="Family schedule for Elena's first 40 days with the new baby.">
+<meta name="theme-color" content="#FAF5EE">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="First 40 Days">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#FAF5EE;--card:#fff;--ink:#2D2622;--ink2:#4A403A;--muted:#857870;--line:#EDE4D9;--line2:#E2D6C8;
+--rose:#C2644E;--rose-d:#A9503C;--rose-s:#F7E4DD;--sage:#6C8C73;--sage-s:#E2ECE2;--honey:#C99532;--honey-s:#F8EDD3;--plum:#8C6B92;--plum-s:#EFE5F0;--sky:#5A82A0;--sky-s:#E2EBF2;
+--shadow:0 1px 2px rgba(60,40,30,.05),0 6px 24px rgba(60,40,30,.06);--serif:'Fraunces',Georgia,serif;--sans:'DM Sans',system-ui,-apple-system,sans-serif}
+*{box-sizing:border-box}html,body{margin:0}
+body{font-family:var(--sans);color:var(--ink);background:var(--bg);line-height:1.45;-webkit-font-smoothing:antialiased;min-height:100vh;
+background-image:radial-gradient(1200px 500px at 10% -10%,#F6E1D6 0,transparent 60%),radial-gradient(900px 500px at 110% 0,#E6EEE3 0,transparent 55%);background-attachment:fixed}
+button{font:inherit;color:inherit;cursor:pointer}
+.wrap{max-width:820px;margin:0 auto;padding:calc(10px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom))}
+h1,h2,h3{font-family:var(--serif);font-weight:600;letter-spacing:-.01em;margin:0}
+header{display:flex;align-items:center;gap:12px;padding:14px 0 6px}
+.mark{width:44px;height:44px;border-radius:50%;background:linear-gradient(145deg,#E8957F,var(--rose));display:grid;place-items:center;color:#fff;font-family:var(--serif);font-weight:600;font-size:17px;box-shadow:0 4px 14px rgba(194,100,78,.35);flex:none}
+.brand{flex:1;min-width:0}.brand h1{font-size:22px;line-height:1.1}.brand p{margin:2px 0 0;color:var(--muted);font-size:14px}
+.btn{border:0;border-radius:999px;padding:10px 16px;font-weight:600;font-size:14.5px;display:inline-flex;align-items:center;gap:7px;text-decoration:none;white-space:nowrap}
+.btn.primary{background:var(--rose);color:#fff;box-shadow:0 4px 14px rgba(194,100,78,.3)}
+.btn.ghost{background:#fff;border:1px solid var(--line2);color:var(--ink2)}
+.btn.soft{background:var(--rose-s);color:var(--rose-d)}
+.btn.sm{padding:7px 13px;font-size:13.5px}
+.card{background:var(--card);border-radius:20px;box-shadow:var(--shadow);border:1px solid rgba(237,228,217,.7);padding:18px}
+section{margin-top:22px}
+.hero{display:flex;align-items:center;gap:18px;margin-top:10px}
+.ring{position:relative;width:96px;height:96px;flex:none}.ring svg{transform:rotate(-90deg)}
+.ring .n{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring .n b{font-family:var(--serif);font-size:32px;line-height:1;font-weight:600}.ring .n span{font-size:11.5px;color:var(--muted);font-weight:600;margin-top:2px}
+.hero h2{font-size:21px}.hero p{margin:4px 0 0;color:var(--muted);font-size:14.5px}
+.hero .w{font-family:var(--serif);font-style:italic;color:var(--ink2);margin-top:8px;font-size:15px}
+.banner{border-radius:16px;padding:12px 14px;font-size:14px;display:flex;gap:10px;align-items:center;margin-top:12px;background:var(--sky-s);color:#2F4F66}
+.banner .x{margin-left:auto;border:0;background:none;font-size:18px;color:inherit}
+.seg{display:flex;background:#F1E9DF;border-radius:999px;padding:3px}
+.seg button{flex:1;border:0;background:none;border-radius:999px;padding:8px 10px;font-weight:600;font-size:14px;color:var(--muted)}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.cal{padding:12px}.cal-top{display:flex;align-items:baseline;justify-content:space-between;gap:6px;flex-wrap:wrap;margin:2px 4px 12px}.cal-top h3{font-size:18px}
+.small{font-size:13px}.muted{color:var(--muted)}
+.dow,.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.dow div{text-align:center;font-size:11.5px;font-weight:700;color:var(--muted);letter-spacing:.04em;padding-bottom:4px}
+.cc{min-height:76px;border-radius:12px;background:#FBF7F2;border:1.5px solid transparent;padding:5px;display:flex;flex-direction:column;gap:3px;text-align:left;font-size:12px;overflow:hidden}
+.cc.out{background:transparent;opacity:.35;pointer-events:none}.cc.past{opacity:.55}.cc:hover{border-color:var(--line2)}
+.cc .cd{display:flex;align-items:baseline;justify-content:space-between}.cc .cd b{font-size:14px}.cc .cd small{font-size:9.5px;color:var(--muted);font-weight:700}
+.cc.today .cd b{background:var(--rose);color:#fff;border-radius:999px;min-width:22px;height:22px;display:inline-grid;place-items:center;padding:0 5px}
+.cc .mon{font-size:9.5px;font-weight:700;color:var(--rose-d);text-transform:uppercase}
+.cc.full{background:#EEF4EC}.cc.nomeal{background:transparent;border:1px dashed var(--line)}
+.pill{display:flex;align-items:center;gap:3px;border-radius:6px;padding:2px 4px;font-size:11px;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden}
+.pill .t{overflow:hidden;text-overflow:ellipsis}
+.honey{background:var(--honey-s);color:#6B4E12}.rose{background:var(--rose-s);color:var(--rose-d)}.sage{background:var(--sage-s);color:#3F5E46}.sky{background:var(--sky-s);color:#2F4F66}.plum{background:var(--plum-s);color:#5E4363}
+.pill.open{background:#fff;box-shadow:inset 0 0 0 1.2px currentColor}.pill.pri{background:var(--rose);color:#fff}
+.more{font-size:10.5px;color:var(--muted);font-weight:700;padding-left:3px}
+@media(max-width:640px){.cc{min-height:62px;padding:4px;gap:2px}.pill .t{display:none}.pill{justify-content:center;padding:1px 0}.cc .pills{display:grid;grid-template-columns:1fr 1fr;gap:2px}.cc .cd small{display:none}
+ .meals .pill.honey .t{display:none}.meals .pill.honey{background:none;font-size:15px}.meals .pill.open .t{display:inline;font-size:10px}.meals .cc .pills{display:flex;flex-direction:column}}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin:12px 4px 2px}.legend span{display:inline-flex;gap:5px;align-items:center}.legend i{width:12px;height:12px;border-radius:4px;display:inline-block}
+.row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:#fff;border:1px solid var(--line);margin-bottom:8px}
+.row.open{border:1.5px dashed var(--line2);background:#FFFDFB}.row.pri{border-color:#E7B4A6;background:#FFF6F2}
+.row .ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:20px;flex:none}
+.row .rb{flex:1;min-width:0}.row .rt{font-weight:600;font-size:15px;line-height:1.25}.row .rm{color:var(--muted);font-size:13px;margin-top:2px}
+.badge{display:inline-block;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;background:var(--rose);color:#fff;vertical-align:middle}
+.dayh{font-family:var(--serif);font-size:16px;margin:18px 4px 8px}
+.tips{list-style:none;margin:10px 0 0;padding:0}.tips li{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}.tips li:last-child{border:0}
+.empty{color:var(--muted);font-size:14px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.6);border:1px dashed var(--line2)}
+.sheet-wrap{position:fixed;inset:0;z-index:60;display:none}.sheet-wrap.show{display:block}
+.sheet-bg{position:absolute;inset:0;background:rgba(45,38,34,.38)}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:85vh;overflow:auto;background:#FFFCF9;border-radius:24px 24px 0 0;padding:8px 18px calc(22px + env(safe-area-inset-bottom));animation:up .25s cubic-bezier(.2,.9,.3,1)}
+.sheet::before{content:"";display:block;width:42px;height:5px;border-radius:9px;background:#E3D8CB;margin:4px auto 12px}
+@media(min-width:700px){.sheet{left:50%;top:50%;bottom:auto;transform:translate(-50%,-50%);width:520px;border-radius:24px;padding:20px 22px}.sheet::before{display:none}}
+@keyframes up{from{transform:translateY(30px);opacity:0}}
+.sh{display:flex;align-items:center;gap:10px;margin-bottom:12px}.sh h3{font-size:20px}.sh p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
+.xb{margin-left:auto;border:0;background:#F3ECE4;width:32px;height:32px;border-radius:50%;font-size:19px}
+.dn{width:44px;height:44px;border-radius:13px;background:#fff;border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;flex:none}
+.dn small{font-size:9.5px;color:var(--muted);font-weight:700}.dn b{font-family:var(--serif);font-size:18px;margin-top:2px}
+.toast{position:fixed;left:50%;top:calc(16px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-16px);background:var(--ink);color:#fff;padding:11px 16px;border-radius:13px;font-size:14px;opacity:0;pointer-events:none;transition:all .25s;z-index:80}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.foot{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
+.loading{padding:60px 0;text-align:center;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark">40</div>
+    <div class="brand"><h1>The First 40 Days</h1><p id="fam">A circle of care for Elena &amp; family</p></div>
+    <a class="btn primary sm" href="https://claude.ai/artifact/6UyBFM5JkisTmJhzCBYgvT" target="_blank" rel="noopener">Sign up to help</a>
+  </header>
+  <div id="install"></div>
+  <main id="main"><div class="loading">Loading the schedule…</div></main>
+  <div class="foot" id="foot"></div>
+</div>
+<div class="sheet-wrap" id="sw"><div class="sheet-bg" data-close></div><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+<script>
+const APP="https://claude.ai/artifact/6UyBFM5JkisTmJhzCBYgvT";
+const FEED="https://raw.githubusercontent.com/thepatrickreardon-sys/Thefirst40days/main/feed/aR5SXx0iAMyxzaGMWc4VX44y.ics";
+const CATS={talulah:["Time with Talulah","🧸","honey"],baby:["Hold the baby","👶","rose"],laundry:["Laundry","🧺","sky"],cleaning:["Tidy & clean","🧽","sage"],cook:["Cook a meal here","🍲","honey"],serve:["Serve a meal","🍽️","rose"],errands:["Groceries & errands","🛒","sky"],company:["Hang out","☕","plum"],night:["Early or late help","🌙","plum"],other:["Helping out","✨","sage"]};
+const MEALS={breakfast:"Breakfast",lunch:"Lunch",dinner:"Dinner"};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad=n=>String(n).padStart(2,"0");const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse=s=>{const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)};
+const addDays=(s,n)=>{const d=parse(s);d.setDate(d.getDate()+n);return ymd(d)};
+const today=()=>ymd(new Date());const diff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
+const fmtD=(s,o={weekday:"short",month:"short",day:"numeric"})=>parse(s).toLocaleDateString("en-US",o);
+const fmtT=t=>{let[h,m]=t.split(":").map(Number);const ap=h>=12?"pm":"am";h=h%12||12;return m?`${h}:${pad(m)} ${ap}`:`${h} ${ap}`};
+const addMin=(t,d)=>{const[h,m]=t.split(":").map(Number);const x=h*60+m+d;return`${pad(Math.floor(x/60)%24)}:${pad(x%60)}`};
+const range=(t,d)=>`${fmtT(t)} – ${fmtT(addMin(t,d))}`;
+let D=null,view="cal";
+const start=()=>D.startDate||today();const days=()=>Array.from({length:40},(_,i)=>addDays(start(),i));
+const dayN=d=>diff(start(),d)+1;const inR=d=>{const n=dayN(d);return n>=1&&n<=40};
+const evs=d=>D.events.filter(e=>e.date===d);
+const slots=()=>{const m=D.meals;if(!m.enabled)return[];return days().flatMap((d,i)=>i%(m.every||1)===0?(m.types||["dinner"]).map(t=>({date:d,type:t})):[])};
+const mealFor=(d,t)=>D.events.find(e=>e.kind==="meal"&&e.date===d&&e.meal===t);
+function info(e){if(e.kind==="meal")return{icon:"🥘",cls:"honey",title:`${MEALS[e.meal]||"Meal"}${e.dish?": "+e.dish:""}`,meta:`${e.who} · drop-off ~${fmtT(e.start)}`};
+  const c=CATS[e.cat]||CATS.other;if(e.kind==="open")return{icon:c[1],cls:c[2],title:e.label,meta:`${range(e.start,e.dur)} · needs someone`,open:true,pri:e.priority};
+  return{icon:c[1],cls:c[2],title:e.label,meta:`${range(e.start,e.dur)} · ${e.who}`}}
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2400)}
+function sheet(h){$("#sheet").innerHTML=h;$("#sw").classList.add("show")}function closeSheet(){$("#sw").classList.remove("show")}
+
+function hero(){const t=today();let big="40",lab="days",h="A circle of care",p="Elena will add the baby's arrival date soon.",pct=0;
+  if(D.startDate){const n=diff(D.startDate,t)+1,nice=fmtD(D.startDate,{weekday:"long",month:"long",day:"numeric"});
+    if(n<1){big=String(1-n);lab=1-n===1?"day to go":"days to go";h=D.born?"Welcome, little one":"Getting ready";p=`Baby ${D.born?"arrived":"is due"} ${nice}.`}
+    else if(n<=40){big=String(n);lab="of 40";pct=n/40;h=`Day ${n}`;p=`${40-n} days left in our first 40 days.`}
+    else{lab="complete";pct=1;h="We made it 💛";p="Thank you for holding us up."}}
+  const C=2*Math.PI*40;
+  return`<div class="card hero"><div class="ring"><svg width="96" height="96" viewBox="0 0 96 96"><circle cx="48" cy="48" r="40" fill="none" stroke="#F3E7DC" stroke-width="8"/><circle cx="48" cy="48" r="40" fill="none" stroke="#C2644E" stroke-width="8" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-pct)}"/></svg><div class="n"><b>${big}</b><span>${lab}</span></div></div>
+   <div><h2>${h}</h2><p>${p}</p>${D.welcome?`<div class="w">${esc(D.welcome)}</div>`:""}</div></div>`}
+function shell(cellFn,cls,legend){const ds=days(),f=parse(ds[0]),l=parse(ds[39]);const s0=new Date(f);s0.setDate(s0.getDate()-s0.getDay());const e0=new Date(l);e0.setDate(e0.getDate()+6-e0.getDay());
+  const m1=fmtD(ds[0],{month:"long"}),m2=fmtD(ds[39],{month:"long",year:"numeric"});let c="";
+  for(let d=new Date(s0);d<=e0;d.setDate(d.getDate()+1)){const k=ymd(d);c+=inR(k)?cellFn(k,d.getDate()===1||k===ds[0]?`<span class="mon">${fmtD(k,{month:"short"})}</span>`:""):`<div class="cc out"><div class="cd"><b>${d.getDate()}</b></div></div>`}
+  return`<div class="card cal ${cls}"><div class="cal-top"><h3>${m1===m2.split(" ")[0]?m2:m1+" – "+m2}</h3><span class="small muted">Tap a day</span></div>
+   <div class="dow">${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(x=>`<div>${x}</div>`).join("")}</div><div class="grid">${c}</div>${legend}</div>`}
+function calGrid(){const t=today();return shell((k,mon)=>{const es=evs(k).map(info);const ms=slots().filter(s=>s.date===k&&!mealFor(s.date,s.type)).map(s=>({icon:"🥘",cls:"honey",title:MEALS[s.type],open:true}));
+  const all=[...es,...ms];const pills=all.slice(0,3).map(i=>`<span class="pill ${i.pri?"pri":i.cls} ${i.open&&!i.pri?"open":""}">${i.pri?"★":i.icon}<span class="t">${esc(i.title)}</span></span>`).join("");
+  return`<button class="cc ${k===t?"today":""} ${k<t?"past":""}" data-day="${k}"><div class="cd"><b>${parse(k).getDate()}</b><small>D${dayN(k)}</small></div>${mon}<div class="pills">${pills}</div>${all.length>3?`<span class="more">+${all.length-3}</span>`:""}</button>`},"",
+  `<div class="legend"><span><i class="honey"></i>Meals & Talulah</span><span><i class="sage"></i>Cleaning</span><span><i class="sky"></i>Laundry & errands</span><span><i class="plum"></i>Company</span><span><i style="background:#fff;box-shadow:inset 0 0 0 1.5px var(--muted)"></i>Open</span><span><i style="background:var(--rose)"></i>Elena's priority</span></div>`)}
+function mealGrid(){const t=today(),sl=slots();if(!D.meals.enabled)return`<div class="empty">The meal train isn't on yet.</div>`;
+  const cov=sl.filter(s=>mealFor(s.date,s.type)).length;
+  return`<div class="card" style="margin-bottom:12px;display:flex;align-items:center;gap:14px"><b style="font-family:var(--serif);font-size:30px">${cov}<span class="muted" style="font-size:18px">/${sl.length}</span></b><div style="flex:1"><div class="small muted">meals covered${D.meals.dropoff?` · drop-off ${esc(D.meals.dropoff.toLowerCase())}`:""}</div><div style="height:9px;background:#F1E9DF;border-radius:9px;margin-top:6px;overflow:hidden"><i style="display:block;height:100%;width:${sl.length?cov/sl.length*100:0}%;background:var(--honey)"></i></div></div></div>`+
+  shell((k,mon)=>{const s=sl.filter(x=>x.date===k);const full=s.length&&s.every(x=>mealFor(x.date,x.type));
+   const pills=s.map(x=>{const m=mealFor(x.date,x.type);return m?`<span class="pill honey">🥘<span class="t">${esc(m.dish||MEALS[x.type])}</span></span>`:`<span class="pill sage open"><span class="t">${s.length>1?MEALS[x.type]:"Open"}</span></span>`}).join("");
+   return`<button class="cc ${k===t?"today":""} ${k<t?"past":""} ${s.length?"":"nomeal"} ${full?"full":""}" data-day="${k}"><div class="cd"><b>${parse(k).getDate()}</b><small>D${dayN(k)}</small></div>${mon}${s.length?`<div class="pills">${pills}</div>`:""}</button>`},"meals",
+   `<div class="legend"><span><i class="honey"></i>Meal coming</span><span><i style="background:#fff;box-shadow:inset 0 0 0 1.5px var(--sage)"></i>Open — needs a meal</span></div>`)}
+function rowsFor(d){const r=evs(d).map(e=>{const i=info(e);return`<div class="row ${i.open?"open":""} ${i.pri?"pri":""}"><div class="ico ${i.cls}">${i.icon}</div><div class="rb"><div class="rt">${i.pri?'<span class="badge">★ Priority</span> ':""}${esc(i.title)}</div><div class="rm">${esc(i.meta)}</div></div></div>`});
+  slots().filter(s=>s.date===d&&!mealFor(s.date,s.type)).forEach(s=>r.push(`<div class="row open"><div class="ico honey">🥘</div><div class="rb"><div class="rt">${MEALS[s.type]} needed</div><div class="rm">Meal train${D.meals.dropoff?" · "+esc(D.meals.dropoff):""}</div></div></div>`));return r}
+function listView(){const t=today();const ds=days().filter(d=>d>=t);let h="";
+  for(const d of ds.length?ds:days()){const r=rowsFor(d);if(!r.length)continue;h+=`<div class="dayh">Day ${dayN(d)} · ${fmtD(d,{weekday:"long",month:"short",day:"numeric"})}${d===t?" · Today":""}</div>`+r.join("")}
+  return h||`<div class="empty">Nothing on the schedule yet.</div>`}
+function render(){
+  $("#fam").textContent=D.family||"A circle of care for Elena & family";
+  $("#main").innerHTML=hero()+
+   `<section><div class="seg">${[["cal","Calendar"],["meals","Meal Train"],["list","Upcoming"]].map(([k,l])=>`<button class="${view===k?"on":""}" data-view="${k}">${l}</button>`).join("")}</div></section>
+   <section style="margin-top:12px">${view==="cal"?calGrid():view==="meals"?mealGrid():listView()}</section>
+   <section><div class="card"><h3 style="font-size:18px">📅 Put it on your calendar</h3><p class="small muted" style="margin:6px 0 10px">Subscribe once and the whole schedule stays up to date on its own.</p>
+    <button class="btn primary sm" data-copy>Copy calendar link</button>
+    <ul class="tips small"><li><span>📱</span><div><b>iPhone:</b> Settings → Calendar → Accounts → Add Account → Other → <b>Add Subscribed Calendar</b>, paste the link.</div></li>
+    <li><span>💻</span><div><b>Mac:</b> Calendar → File → <b>New Calendar Subscription</b>, paste the link.</div></li>
+    <li><span>🗓️</span><div><b>Google Calendar:</b> on a computer, Other calendars ＋ → <b>From URL</b>, paste the link.</div></li></ul></div></section>
+   <section><div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Want to help?</b><div class="small muted">Sign up for a shift or bring a meal in the family app.</div></div><a class="btn primary" href="${APP}" target="_blank" rel="noopener">Sign up to help</a></div></section>`;
+  if(D.updated)$("#foot").textContent="Schedule updated "+new Date(D.updated).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+" · refreshes every couple of hours";
+}
+function daySheet(d){const r=rowsFor(d);
+  sheet(`<div class="sh"><div class="dn"><small>DAY</small><b>${dayN(d)}</b></div><div><h3>${fmtD(d,{weekday:"long",month:"short",day:"numeric"})}</h3><p>${d===today()?"Today · ":""}${evs(d).filter(e=>e.kind!=="open").length||"No one"} helping</p></div><button class="xb" data-close>×</button></div>
+   ${r.length?r.join(""):`<div class="empty">Nothing planned yet — a free day.</div>`}
+   <a class="btn primary" style="width:100%;justify-content:center;margin-top:8px" href="${APP}" target="_blank" rel="noopener">Sign up for this day</a>`)}
+document.addEventListener("click",e=>{
+  if(e.target.closest("[data-close]"))return closeSheet();
+  const v=e.target.closest("[data-view]");if(v){view=v.dataset.view;render();return}
+  const d=e.target.closest("[data-day]");if(d)return daySheet(d.dataset.day);
+  if(e.target.closest("[data-copy]")){navigator.clipboard.writeText(FEED).then(()=>toast("Link copied — paste it into your calendar app"),()=>sheet(`<div class="sh"><h3>Calendar link</h3><button class="xb" data-close>×</button></div><textarea readonly style="width:100%;height:90px;border-radius:12px;border:1px solid var(--line2);padding:10px;font-size:14px" onclick="this.select()">${FEED}</textarea>`));return}
+  if(e.target.closest("[data-hideinstall]")){$("#install").innerHTML="";try{localStorage.setItem("f40-hide-install","1")}catch(_){}}
+});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheet()});
+// Add-to-home-screen hint
+(function(){const standalone=matchMedia("(display-mode: standalone)").matches||navigator.standalone;let hidden=false;try{hidden=!!localStorage.getItem("f40-hide-install")}catch(_){}
+  if(standalone||hidden)return;const ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  if(ios)$("#install").innerHTML=`<div class="banner">📲 <div><b>Add to your Home Screen:</b> tap <b>Share</b> <span aria-hidden="true">⬆️</span>, then <b>Add to Home Screen</b>.</div><button class="x" data-hideinstall aria-label="Dismiss">×</button></div>`;
+  window.addEventListener("beforeinstallprompt",ev=>{ev.preventDefault();$("#install").innerHTML=`<div class="banner">📲 <div><b>Add The First 40 Days to your Home Screen</b></div><button class="btn primary sm" id="inst" style="margin-left:auto">Install</button><button class="x" data-hideinstall aria-label="Dismiss">×</button></div>`;
+    $("#inst").onclick=()=>{ev.prompt();$("#install").innerHTML=""}});})();
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+fetch("schedule.json?t="+Date.now(),{cache:"no-store"}).then(r=>r.json()).then(j=>{D=j;D.events=D.events||[];D.meals=D.meals||{enabled:false};render()})
+ .catch(()=>{$("#main").innerHTML=`<div class="empty" style="margin-top:20px">Couldn't load the schedule right now. Check your connection and refresh.</div>`});
+</script>
+</body>
+</html>

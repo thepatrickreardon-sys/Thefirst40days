@@ -2,7 +2,7 @@
 """Build The First 40 Days calendar feed.
 
 Usage: python3 build_ics.py data.json
-data.json = {"settings": {...}, "needs": [{"id":..., ...}], "people": [{"id": uid, "data": {...}}]}
+data.json = {"settings": {...settings/main doc...}, "needs": [{"id":..., ...}], "people": [{"id": uid, "data": {...}}]}
 (exported from The First 40 Days app's database). Writes feed/<token>.ics.
 Phone numbers, the home address and allergy notes are deliberately left out:
 this file is public.
@@ -11,7 +11,9 @@ import json, sys, os, hashlib
 from datetime import datetime, timedelta, timezone
 
 TOKEN = "aR5SXx0iAMyxzaGMWc4VX44y"
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feed", TOKEN + ".ics")
+ROOT = os.path.dirname(os.path.abspath(__file__))
+OUT = os.path.join(ROOT, "feed", TOKEN + ".ics")
+JSON_OUT = os.path.join(ROOT, "schedule.json")
 
 CATS = {
     "talulah": "Time with Talulah", "tallulah": "Time with Talulah", "baby": "Hold the baby",
@@ -85,7 +87,8 @@ def main(path):
     needs = data.get("needs") or []
     people = data.get("people") or []
     mod = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    events, claimed = [], {}
+    settings = data.get("settings") or {}
+    events, claimed, pub = [], {}, []
     for p in people:
         d = p.get("data") or {}
         name = (d.get("name") or "A helper").strip()
@@ -98,10 +101,13 @@ def main(path):
                 title = f"🥘 {first}: {meal}" + (f" — {i['dish']}" if i.get("dish") else "")
                 desc = "\n".join(x for x in [f"{name} is bringing {meal.lower()}.", f"Dish: {i['dish']}" if i.get("dish") else "", f"Note: {i['note']}" if i.get("note") else "", "From The First 40 Days"] if x)
                 events.append(event(i["id"], title, i["date"], i.get("start") or "17:00", i.get("dur") or 30, desc, mod))
+                pub.append({"id": i["id"], "kind": "meal", "date": i["date"], "start": i.get("start") or "17:00", "dur": 30, "meal": i.get("mealType") or "dinner", "dish": i.get("dish") or "", "who": first})
             else:
                 label = i.get("title") or CATS.get(i.get("cat"), "Helping out")
                 desc = "\n".join(x for x in [f"{name}: {CATS.get(i.get('cat'), 'Helping out')}", f"Note: {i['note']}" if i.get("note") else "", "From The First 40 Days"] if x)
                 events.append(event(i["id"], f"{first}: {label}", i["date"], i.get("start"), i.get("dur") or 60, desc, mod))
+                cat = "talulah" if i.get("cat") == "tallulah" else (i.get("cat") or "other")
+                pub.append({"id": i["id"], "kind": "help", "date": i["date"], "start": i.get("start") or "10:00", "dur": int(i.get("dur") or 60), "cat": cat, "label": label, "who": first})
     for n in needs:
         if claimed.get(n["id"], 0) >= int(n.get("spots") or 1):
             continue
@@ -109,6 +115,8 @@ def main(path):
         title = ("★ " if n.get("priority") else "") + "Open: " + label
         desc = "\n".join(x for x in ["Elena asked for help with this. Sign up in The First 40 Days app.", f"Note: {n['note']}" if n.get("note") else ""] if x)
         events.append(event("need-" + n["id"], title, n["date"], n.get("start"), n.get("dur") or 60, desc, mod))
+        cat = "talulah" if n.get("cat") == "tallulah" else (n.get("cat") or "other")
+        pub.append({"id": "need-" + n["id"], "kind": "open", "date": n["date"], "start": n.get("start") or "10:00", "dur": int(n.get("dur") or 60), "cat": cat, "label": label, "priority": bool(n.get("priority")), "spots": int(n.get("spots") or 1) - claimed.get(n["id"], 0)})
 
     cal = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//The First 40 Days//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
            "X-WR-CALNAME:The First 40 Days", "X-WR-TIMEZONE:America/New_York",
@@ -122,12 +130,37 @@ def main(path):
     def strip(t):
         return "\n".join(l for l in t.splitlines() if not l.startswith(("DTSTAMP", "LAST-MODIFIED")))
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    if os.path.exists(OUT) and strip(open(OUT, encoding="utf-8", newline="").read()) == strip(body):
-        print(f"unchanged ({len(events)} events)")
-        return
-    with open(OUT, "w", encoding="utf-8", newline="") as f:
-        f.write(body)
-    print(f"updated ({len(events)} events)")
+    changed = False
+    if not (os.path.exists(OUT) and strip(open(OUT, encoding="utf-8", newline="").read()) == strip(body)):
+        with open(OUT, "w", encoding="utf-8", newline="") as f:
+            f.write(body)
+        changed = True
+
+    # Public page data. Deliberately no phone numbers, address or allergy notes.
+    meals = settings.get("meals") or {}
+    page = {
+        "startDate": settings.get("startDate") or "",
+        "born": bool(settings.get("born")),
+        "babyName": settings.get("babyName") or "",
+        "family": settings.get("family") or "",
+        "welcome": settings.get("welcome") or "",
+        "meals": {"enabled": meals.get("enabled", True), "types": meals.get("types") or ["dinner"],
+                  "every": int(meals.get("every") or 1), "dropoff": meals.get("dropoff") or ""},
+        "events": sorted(pub, key=lambda e: (e["date"], e["start"])),
+    }
+    old = None
+    if os.path.exists(JSON_OUT):
+        try:
+            old = json.load(open(JSON_OUT, encoding="utf-8"))
+            old.pop("updated", None)
+        except Exception:
+            old = None
+    if old != page:
+        page["updated"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with open(JSON_OUT, "w", encoding="utf-8") as f:
+            json.dump(page, f, ensure_ascii=False, indent=1)
+        changed = True
+    print(("updated" if changed else "unchanged") + f" ({len(events)} events)")
 
 
 if __name__ == "__main__":
