@@ -15,6 +15,16 @@
  },
  "events": [
   {
+   "id": "8yq2ou3dp5t",
+   "kind": "help",
+   "date": "2026-11-15",
+   "start": "10:00",
+   "dur": 360,
+   "cat": "company",
+   "label": "Hang out",
+   "who": "Patrick"
+  },
+  {
    "id": "36oaed7znq9",
    "kind": "meal",
    "date": "2026-11-15",
@@ -75,5 +85,5 @@
    "who": "Patrick"
   }
  ],
- "updated": "2026-11-15T14:56:52Z"
+ "updated": "2026-11-15T23:57:28Z"
 }
