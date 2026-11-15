@@ -35,6 +35,16 @@
    "who": "Patrick"
   },
   {
+   "id": "dy6kr2ahxw2",
+   "kind": "help",
+   "date": "2026-11-16",
+   "start": "10:00",
+   "dur": 120,
+   "cat": "talulah",
+   "label": "Time with Talulah",
+   "who": "Patrick"
+  },
+  {
    "id": "8t3lv6nz207",
    "kind": "help",
    "date": "2026-11-18",
@@ -55,5 +65,5 @@
    "who": "Patrick"
   }
  ],
- "updated": "2026-11-15T13:12:05Z"
+ "updated": "2026-11-15T14:04:55Z"
 }
