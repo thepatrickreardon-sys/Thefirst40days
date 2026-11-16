@@ -10,7 +10,12 @@
 <meta name="apple-mobile-web-app-title" content="First 40 Days">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png?v=12">
-<link rel="icon" href="icon-192.png?v=12">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=12">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=12">
+<meta property="og:title" content="The First 40 Days">
+<meta property="og:description" content="A circle of care for Elena &amp; family">
+<meta property="og:image" content="https://thepatrickreardon-sys.github.io/Thefirst40days/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
 <script type="module">
 // Firebase adapter: exposes window.FB with a tiny db/auth API the app uses.
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
@@ -71,7 +76,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:600;letter-spacing:-.01em;margin:0
 
 /* header */
 header.top{display:flex;align-items:center;gap:12px;padding:22px 0 10px}
-.mark{width:44px;height:44px;border-radius:50%;background:linear-gradient(145deg,#E8957F,var(--rose));display:grid;place-items:center;color:#fff;font-family:var(--serif);font-weight:700;font-size:17px;box-shadow:0 4px 14px rgba(194,100,78,.35);flex:none}
+.mark{width:44px;height:44px;border-radius:12px;background:url(mark-96.png?v=12) center/cover no-repeat;box-shadow:0 4px 14px rgba(194,100,78,.35);flex:none}
 .brand h1{font-size:23px;line-height:1.1}
 .brand p{margin:2px 0 0;color:var(--muted);font-size:14px}
 .brand{min-width:0;flex:1}
@@ -349,7 +354,7 @@ section{margin-top:26px}
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="mark">40</div>
+    <div class="mark" role="img" aria-label="The First 40 Days"></div>
     <div class="brand"><h1>The First 40 Days</h1><p id="familyLine">A circle of care for Elena &amp; family</p></div>
     <button class="syncbtn" data-act="sync" aria-label="Sync to your calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M9 15.5l2 2 4-4"/></svg><span>Sync calendar</span></button>
   </header>
