@@ -93,7 +93,17 @@
    "cat": "cleaning",
    "label": "Tidy & clean",
    "who": "Patrick"
+  },
+  {
+   "id": "jhwxrd84bsf",
+   "kind": "help",
+   "date": "2026-12-23",
+   "start": "12:30",
+   "dur": 120,
+   "cat": "cook",
+   "label": "Cook a meal here",
+   "who": "Lauren"
   }
  ],
- "updated": "2026-11-17T01:56:54Z"
+ "updated": "2026-11-19T17:39:55Z"
 }
