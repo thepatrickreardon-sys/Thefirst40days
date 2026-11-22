@@ -47,8 +47,10 @@ await check("owner makes an account and starts a circle", async () => {
   await owner.fill("input[name=allergies]", "No peanuts please"); await owner.fill("input[name=yourName]", "Ana");
   await shot(owner, "setup");
   await owner.click("form[data-form=newcircle] [type=submit]");
-  await owner.locator(".invite-box").waitFor({ timeout: 15000 });
-  invite = (await owner.locator(".invite-box").innerText()).trim();
+  await owner.getByText("Your circle is ready").waitFor({ timeout: 15000 });
+  invite = (await owner.locator("#sheet .invite-box").innerText()).trim();
+  await shot(owner, "ready");
+  await owner.click("#sheet [data-act=close]");
   if (!/#c=.+&k=.{24}$/.test(invite)) throw new Error("bad invite link " + invite);
   await shot(owner, "manage-invite");
 });

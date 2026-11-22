@@ -1282,7 +1282,10 @@ function openCircle(cid){
   db.doc("contacts/"+S.authUser.uid).get().then(d=>{S.myContact=(d.exists&&d.data().phone)||"";render()}).catch(()=>{});
   rememberCircle(cid);render();
 }
-function loadAdmin(){subscribeAdminData();FB.db.doc("secrets/invite").get().then(d=>{S.invite=(d.exists&&d.data().code)||"";render()}).catch(()=>{})}
+function loadAdmin(){subscribeAdminData();FB.db.doc("secrets/invite").get().then(d=>{S.invite=(d.exists&&d.data().code)||"";render();if(S.justCreated&&S.invite){S.justCreated=false;readySheet()}}).catch(()=>{})}
+function readySheet(){openSheet(sheetHead("Your circle is ready 💛","Now invite family and friends. Anyone with this link can join and sign up to help.")+
+  `<div class="invite-box">${esc(inviteUrl())}</div><div class="calrow" style="margin-top:12px"><button class="btn primary" data-act="shareinvite">Share link</button><button class="btn ghost" data-act="copyinvite">Copy</button></div>
+  <p class="small muted" style="margin:14px 2px 0">You’ll always find this link under <b>Manage</b> → Invite people. Next, look through Manage to add an address, visiting notes and anything you’d like help with.</p>`)}
 async function rememberCircle(cid,remove){const u=S.authUser;if(!u)return;try{const ref=FB.db.root.doc("users/"+u.uid);const d=await ref.get();let list=(d.exists&&d.data().circles)||[];
   list=list.filter(x=>x!==cid);if(!remove)list.unshift(cid);await ref.set({circles:list.slice(0,20),updatedAt:Date.now()})}catch(e){console.warn(e)}}
 async function loadMyCircles(){const u=S.authUser;if(!u)return;try{const d=await FB.db.root.doc("users/"+u.uid).get();const ids=(d.exists&&d.data().circles)||[];
@@ -1353,7 +1356,7 @@ function screenView(){
 }
 function circleAdminView(){
   const ownerUid=S.circle&&S.circle.ownerUid,mgr=(S.circle&&S.circle.managers)||[],me=S.authUser.uid;
-  let h=`<section><div class="card"${S.justCreated?' style="border-color:var(--rose);box-shadow:0 0 0 3px var(--rose-s)"':""}><div class="admin-h"><span class="n">4</span><h3>Invite people</h3></div>
+  let h=`<section><div class="card"><div class="admin-h"><span class="n">4</span><h3>Invite people</h3></div>
    <p class="small muted" style="margin:-6px 0 10px">Send this link to family and friends. Anyone with it can join and sign up to help.</p>
    ${S.invite?`<div class="invite-box">${esc(inviteUrl())}</div><div class="calrow" style="margin-top:10px"><button class="btn primary sm" data-act="shareinvite">Share link</button><button class="btn ghost sm" data-act="copyinvite">Copy</button><button class="btn ghost sm" data-act="newinvite">Make a new link</button></div>
    <p class="small muted" style="margin:10px 0 0">A new link turns off the old one. People already in the circle stay in.</p>`:`<div class="small muted">Loading the link…</div>`}</div></section>`;
@@ -1366,7 +1369,7 @@ function circleAdminView(){
   h+=`<section><div class="card"><div class="admin-h"><span class="n">6</span><h3>${me===ownerUid?"Delete this circle":"Leave this circle"}</h3></div>
    <p class="small muted" style="margin:-6px 0 10px">${me===ownerUid?"Permanently deletes the schedule, every sign-up and every phone number. This can’t be undone.":"You’ll stop managing this circle and need a new invite to come back."}</p>
    <button class="btn ghost sm" data-act="${me===ownerUid?"askdelcircle":"askleave"}" style="color:#B3261E">${me===ownerUid?"Delete circle…":"Leave circle…"}</button></div></section>`;
-  S.justCreated=false;return h;
+  return h;
 }
 
 /* ---------- boot ---------- */
