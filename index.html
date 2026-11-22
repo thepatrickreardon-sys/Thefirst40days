@@ -417,42 +417,42 @@ const CATS={
   other:{label:"Something else",icon:"✨",color:"sage",hint:"Tell us what you have in mind"}
 };
 /* ---------- getting ready (before baby) ---------- */
-const PREP_INTRO={title:"Help Us Get Ready for Baby",text:"We’re getting the house, the freezer, and our little family ready to welcome baby girl. If you’d like to help, pick something that sounds like you. An hour playing with Lu, a soup for the freezer, an extra pair of hands for Patrick, or a really good hair braid would all make our lives a little sweeter right now."};
+const PREP_INTRO={title:"Help Us Get Ready for Baby",text:"We’re getting our home and our family ready to welcome baby girl. If you’d like to help, pick something that sounds like you. Time with Lu, a meal for the freezer, an extra pair of hands, or a little pampering for Elena would all make our lives a little sweeter right now."};
 const PREP={
   lu:{label:"Hang Out With Lu",icon:"🧸",color:"honey",meta:["60–90 minutes","One helper","Confirm plans with Elena or Patrick"],dur:90,start:"09:30",
-    opts:[{k:"home",t:"Play at our house",d:"Hang out with Lu downstairs or in another space we agree on while I sort clothes, organize the bedroom, or get a few things done. Read books, do a little art project, build something, or have a dance party."},
-      {k:"adventure",t:"Take Lu on a little adventure",d:"Go for a walk, visit the playground, or head to the library. We’ll agree on where you’re going and how you’ll get there ahead of time."},
-      {k:"park",t:"Meet us at the park or preserve",d:"Come along and take the lead playing with Lu so I can get a little time to myself, even if it’s just a quiet loop through the woods."}],
-    foot:"We’ll share Lu’s routine and have her snacks ready. Morning slots usually work well around her nap.",allergy:true},
-  clothes:{label:"Organize Baby Clothes & Make Room",icon:"👕",color:"sky",meta:["60–90 minutes","One or two helpers"],dur:90,start:"10:00",
-    opts:[{k:"sort",t:"Sort baby clothes by size",d:"Fold and put away newborn and 0–3 month clothes so they’re easy to grab."},
-      {k:"bins",t:"Label bins & pack outgrown clothes",d:"Label bins for bigger sizes and pack up the clothes Lu has outgrown for attic storage."},
-      {k:"closet",t:"Swap seasonal clothes",d:"Help swap my spring and summer clothes for winter clothes and make room in our bedroom closet for clothes coming over from my other closet."},
-      {k:"shelves",t:"Clear the bedroom shelves & drawer",d:"Clear and organize the bedroom shelves and top underwear drawer. I can make the decisions about what goes where while you help sort, fold, and put things away."}]},
-  birth:{label:"Prepare the Birth Space & Help With Heavy Lifting",short:"Birth space & heavy lifting",icon:"📦",color:"sage",meta:["90 minutes","Two helpers"],dur:90,start:"10:00",
-    opts:[{k:"down",t:"Bring things down from the attic",d:"Bring down the home birth supply bin, newborn clothes, and remaining winter clothes from the attic."},
-      {k:"up",t:"Carry things up to the attic",d:"Carry up Lu’s outgrown clothes, packed-away seasonal clothes, and artwork we’re storing. Bring down the artwork I pick to hang."},
-      {k:"furniture",t:"Move furniture & clear space",d:"Help Patrick move furniture or heavy bins and clear space in the bedroom for the birth pool. Bring the little drum downstairs."},
-      {k:"supplies",t:"Set out linens & birth supplies",d:"Help set out towels and linens and organize the birth supplies where Patrick and I can easily find them."}]},
-  freezer:{label:"Stock the Postpartum Freezer",short:"Postpartum freezer",icon:"🍲",color:"honey",meta:["30-minute drop-off window","or 90-minute batch-cooking shift"],dur:30,start:"17:00",dish:true,
-    opts:[{k:"dropoff",t:"Drop off a freezer meal",d:"A family dinner, a few single portions, or something I can eat with one hand are all welcome. Porch drop-off is great.",dur:30},
-      {k:"cook",t:"Come cook with me",d:"We’ll agree on a recipe and ingredients ahead of time. Help chop, cook, portion, label, and get the kitchen back in order.",dur:90},
-      {k:"signature",t:"Make something you already love to cook",d:"If you make an incredible soup, stew, or breakfast burrito, tell me what it is. We’d love to try it.",dur:30}],
+    opts:[{k:"home",t:"Play at our house",d:"Keep Lu company at home while we get a few things done. Books, art, building, dance parties: whatever she’s into that day."},
+      {k:"adventure",t:"Take Lu on a little outing",d:"A walk, the playground, or the library. We’ll agree on the plan ahead of time."},
+      {k:"park",t:"Meet us at the park",d:"Come along and take the lead playing with Lu so Elena can have a little time to herself."}],
+    foot:"We’ll fill you in on her routine and have snacks ready.",allergy:true},
+  clothes:{label:"Sort & Organize",icon:"👕",color:"sky",meta:["60–90 minutes","One or two helpers"],dur:90,start:"10:00",
+    opts:[{k:"sort",t:"Sort baby clothes",d:"Fold, sort by size, and put away the newborn things so they’re easy to grab."},
+      {k:"bins",t:"Pack away & label",d:"Help pack up outgrown clothes and label bins."},
+      {k:"closet",t:"Make some room",d:"Help clear out and rearrange a few spaces to make room for the new baby."},
+      {k:"shelves",t:"General organizing",d:"An extra pair of hands to sort, fold, and put things away. We’ll decide what goes where."}]},
+  birth:{label:"Heavy Lifting & Setting Up",short:"Heavy lifting & setup",icon:"📦",color:"sage",meta:["About 90 minutes","Two helpers"],dur:90,start:"10:00",
+    opts:[{k:"down",t:"Bring things out of storage",d:"Help bring down the baby gear and supplies we’ve got stored away."},
+      {k:"up",t:"Put things into storage",d:"Help carry outgrown and seasonal things up to storage."},
+      {k:"furniture",t:"Move furniture",d:"Help Patrick move furniture and heavy bins and set up for the baby."},
+      {k:"supplies",t:"Set up supplies",d:"Help set out linens and supplies so everything’s ready when we need it."}]},
+  freezer:{label:"Stock the Postpartum Freezer",short:"Postpartum freezer",icon:"🍲",color:"honey",meta:["30-minute drop-off","or 90-minute cooking shift"],dur:30,start:"17:00",dish:true,
+    opts:[{k:"dropoff",t:"Drop off a freezer meal",d:"A family dinner, a few single portions, or something easy to eat with one hand. Porch drop-off is great.",dur:30},
+      {k:"cook",t:"Come cook with us",d:"We’ll agree on a recipe ahead of time, then cook, portion, label, and clean up together.",dur:90},
+      {k:"signature",t:"Make your favorite",d:"Got a great soup, stew, or breakfast burrito? Tell us what it is. We’d love to try it.",dur:30}],
     ideas:[["Soups and stews",["Chicken, white bean, and kale soup","Beef and vegetable stew","Lentil, tomato, and spinach soup"]],
       ["Freezer dinners",["Turkey meatballs in tomato sauce with rice","Black bean and sweet potato enchiladas","Shredded chicken with roasted vegetables and quinoa"]],
       ["Breakfasts and one-handed snacks",["Egg and spinach breakfast burritos","Apple-cinnamon baked oatmeal","Turkey and veggie mini frittatas"]]],
-    tip:"Think warming, filling, and easy to reheat. Meals with protein, a grain or starchy vegetable, and some produce are especially welcome. Beef, lentils, and beans are good options for iron-rich meals. Tomatoes and peppers add vitamin C to bean and lentil dishes, and eggs and beans contribute choline, which is especially relevant during breastfeeding.",
-    foot:"Please label the dish with its full ingredients, date, and reheating instructions. If you’re making something for Lu to share, check with us about ingredients and cross-contact first because of her food allergies.",allergy:true},
-  yard:{label:"Give Patrick a Hand With the Yard",short:"Yard help with Patrick",icon:"🍂",color:"sage",meta:["90–120 minutes","Two or three helpers"],dur:120,start:"10:00",
-    opts:[{k:"leaves",t:"Rake leaves & haul debris",d:"Rake leaves, pick up sticks, and bag or haul yard debris."},
-      {k:"walks",t:"Clear the walkways & entry",d:"Clear and sweep the walkways, steps, patio, and outdoor entry."},
-      {k:"furniture",t:"Store outdoor furniture",d:"Help move or store outdoor furniture, planters, and seasonal items."}],
-    foot:"If you’re handy or have a knack for getting an outdoor space back in shape, tell Patrick what you like doing. He’ll have a few jobs ready when you arrive."},
+    tip:"Think warming, filling, and easy to reheat. Meals with protein, a grain or starchy vegetable, and some veggies are especially welcome.",
+    foot:"Please label the dish with its ingredients, the date, and how to reheat it. If it’s something Lu might share, check with us first because of her food allergies.",allergy:true},
+  yard:{label:"Give Patrick a Hand Outside",short:"Outdoor help",icon:"🍂",color:"sage",meta:["90–120 minutes","Two or three helpers"],dur:120,start:"10:00",
+    opts:[{k:"leaves",t:"Yard cleanup",d:"Raking, picking up, and bagging or hauling debris."},
+      {k:"walks",t:"Tidy the entry",d:"Sweep and clear the walkways and front entry."},
+      {k:"furniture",t:"Put things away for the season",d:"Help move and store outdoor furniture and seasonal things."}],
+    foot:"Handy outdoors? Tell Patrick what you like doing and he’ll have a job ready."},
   mama:{label:"Pamper & Honor the Mama",short:"Pamper the mama",icon:"🌸",color:"rose",meta:["30–90 minutes","One helper","Before or after baby arrives"],dur:60,start:"14:00",
-    opts:[{k:"home",t:"Pamper me at home",d:"Are you really good at braiding hair? Do you give a great neck or foot massage? Want to bring tea and sit with me? Yes, please.",dur:60},
-      {k:"time",t:"Give me a little time to myself",d:"Hang with Lu while I go get a facial, which I really want. After baby arrives, you could hold her nearby while I take a shower or get a freaking ten-minute foot massage. We’ll see what works that day.",dur:180},
-      {k:"outside",t:"Get outside with me",d:"Come for a walk and some adult conversation, or meet me and Lu at the park or preserve. You can play with her while I take a little walk in the woods by myself.",dur:90},
-      {k:"moment",t:"Help me mark the moment",d:"Bring flowers, write me a note to open after the birth, or share a small blessing with me over tea.",dur:30}]}
+    opts:[{k:"home",t:"A little pampering",d:"Got a special skill like braiding or massage? Or just bring tea and sit with Elena for a while.",dur:60},
+      {k:"time",t:"Give Elena some time to herself",d:"Cover things at home so she can get out for a bit, or after baby arrives, hold the baby so she can rest or shower.",dur:120},
+      {k:"outside",t:"Get outside together",d:"Come for a walk and some grown-up conversation.",dur:90},
+      {k:"moment",t:"Help mark the moment",d:"Flowers, a note to open after the birth, or a small blessing over tea.",dur:30}]}
 };
 const PREP_NOTE={lbl:"What would you love to help with?",ph:"Pick an option above or tell us what you’re really good at. Maybe you’re a champion drawer organizer, make a legendary stew, love taking toddlers on little adventures, or know how to make someone feel cared for. If you have an idea we haven’t listed, we’d love to hear it."};
 const catInfo=k=>CATS[k]||PREP[k]||CATS.other;
@@ -939,7 +939,7 @@ function mineView(){
    <div class="field"><label class="lbl">Phone <span class="opt">optional</span></label><input name="pphone" type="tel" value="${esc(me.phone||"")}" placeholder="So Elena can text you"></div></div>
    <div><button class="btn ghost" type="submit">Save</button></div></form></div></section>`;
   return h}
-const APP_VER="Nov 22 · v9";
+const APP_VER="Nov 22 · v10";
 function accountCard(){return accountCard0()+`<p class="small muted" style="text-align:center;margin:6px 0 0">App version ${APP_VER}${S.authUser?(S.authUser.isAnonymous?" · guest":" · "+esc((S.authUser.email||((S.authUser.providerData||[]).find(x=>x&&x.email)||{}).email||"no email")))+(S.isAdmin?" · manager":""):" · not connected"}</p>`}
 function accountCard0(){const u=S.authUser;
   if(u&&!u.isAnonymous)return`<section><div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Signed in</b><div class="small muted">${esc(u.email||"")}${S.isAdmin?" · can manage Elena's tab":""}</div></div><button class="btn ghost sm" data-act="signout">Sign out</button>${!u.emailVerified&&S.isAdmin?`<div class="banner warn" style="margin:12px 0 0"><span>✉️</span><div>Confirm your email to manage Elena's tab. <button class="linkbtn" data-act="verify">Send the email</button> · <button class="linkbtn" data-act="reloaduser">I've confirmed it</button></div></div>`:""}<details class="other-ways" style="width:100%"><summary>Set or change your password</summary><form novalidate data-form="setpw" class="form" style="margin-top:10px"><div class="field"><input name="pw" type="password" required minlength="6" autocomplete="new-password" placeholder="New password (6+ characters)"></div><button class="btn ghost sm" type="submit">Save password</button></form></details></div></section>`;
