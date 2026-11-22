@@ -383,6 +383,7 @@ section{margin-top:26px}
 .namechips{display:flex;flex-wrap:wrap}.namechips .dish{border:0;cursor:pointer;font:inherit;font-size:14px}
 .other-ways{margin-top:14px}.other-ways summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--rose-d)}
 .subcard{padding:14px 16px;background:linear-gradient(160deg,#fff,#F3F7F1);border-color:#D8E5D6}.subcard.ok{background:var(--sage-s)}.calbtn.sub{font-weight:700}
+.arrow-hint{text-align:center;font-size:34px;color:var(--rose);margin-top:8px;animation:bob 1.2s ease-in-out infinite}@keyframes bob{50%{transform:translateY(8px)}}
 </style>
 </head>
 <body>
@@ -460,7 +461,7 @@ const MEAL={icon:"🥘",color:"honey"};
 const MEALTYPES={breakfast:"Breakfast",lunch:"Lunch",dinner:"Dinner"};
 const FILTERS=[["all","Everything"],["open","Needs help"],["meals","Meals"],["talulah","Talulah"],["house","House help"],["care","Elena & baby"]];
 const FILTER_CATS={house:["laundry","cleaning","cook","serve","errands"],care:["baby","company","night"],talulah:["talulah"]};
-const DEFAULTS={startDate:"",born:false,babyName:"",family:"Elena · Patrick · Talulah · baby",address:"",welcome:"",
+const DEFAULTS={startDate:"",born:false,babyName:"",dueText:"",family:"Elena · Patrick · Talulah · baby",address:"",welcome:"",
   visitNotes:"Please wash your hands when you arrive.\nIf you're feeling even a little sick, please sit this one out.\nNo need to be entertained — help yourself to whatever you need.\nKeep visits gentle and short unless Elena asks you to stay.",
   talulahNotes:"",
   meals:{enabled:true,types:["dinner"],every:1,dropoff:"Between 4:30 and 6:00 pm",household:"2 adults and a 2-year-old",allergies:"Talulah is allergic to cashews and pistachios. Please leave them out completely, including sauces, pesto, granola, baked goods and desserts.",loves:"",avoid:"",instructions:"Leave it in the cooler by the front door and send a text — no need to knock."}};
@@ -627,6 +628,27 @@ async function saveIcs(fileBase,calName,events,target){
   openSheet(target==="google"?googleSteps(fileBase):appleSteps(fileBase));
 }
 
+/* ---------- add to home screen ---------- */
+let installEvt=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEvt=e;render()});
+window.addEventListener("appinstalled",()=>{installEvt=null;try{localStorage.setItem("f40-installed","1")}catch(_){}render()});
+const isStandalone=()=>(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true;
+const isIOS=()=>/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+const inAppBrowser=()=>/FBAN|FBAV|Instagram|Line\/|GSA\/|Snapchat/.test(navigator.userAgent);
+const lsFlag=k=>{try{return localStorage.getItem(k)==="1"}catch(_){return false}};
+function canInstall(){return!isStandalone()&&!lsFlag("f40-installed")&&(installEvt||isIOS()||/Android/.test(navigator.userAgent))}
+function installCard(dismissable){if(!canInstall()||(dismissable&&lsFlag("f40-hide-install")))return"";
+  return`<section><div class="card subcard" style="display:flex;align-items:center;gap:14px;position:relative;padding-right:${dismissable?40:16}px"><img src="apple-touch-icon.png" alt="" style="width:52px;height:52px;border-radius:12px"><div style="flex:1;min-width:0"><b>Add the app to your Home Screen</b><div class="small muted">Opens like a regular app, no searching for the link.</div></div><button class="btn primary sm" data-act="install">Add it</button>${dismissable?`<button class="x" data-act="hideinstall" aria-label="Not now" style="position:absolute;top:8px;right:8px;width:28px;height:28px;font-size:16px">×</button>`:""}</div></section>`}
+const SHARE_ICO='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0A84FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+function installSheet(){
+  if(installEvt){const e=installEvt;e.prompt();e.userChoice.then(r=>{if(r&&r.outcome==="accepted"){try{localStorage.setItem("f40-installed","1")}catch(_){}toast("Added 💛")}installEvt=null;render()}).catch(()=>{});return}
+  if(inAppBrowser()){openSheet(sheetHead("Open it in Safari first","This app was opened inside another app, which can't add it to your Home Screen.")+`<ul class="tips"><li><span>1</span><div>Tap the <b>•••</b> or menu button and choose <b>Open in Safari</b> (or Open in browser).</div></li><li><span>2</span><div>Then tap <b>Add it</b> again.</div></li></ul><div class="calrow" style="margin-top:12px"><button class="btn ghost" data-act="copylink">Copy the link</button></div>`);return}
+  if(isIOS()){openSheet(sheetHead("Add to your Home Screen","Three taps in Safari:")+`<ul class="tips">
+   <li><span>1</span><div>Tap the <b>Share</b> button ${SHARE_ICO}. It's at the bottom of Safari, or inside the <b>•••</b> button on newer iPhones.</div></li>
+   <li><span>2</span><div>Scroll down and tap <b>Add to Home Screen</b>.</div></li>
+   <li><span>3</span><div>Tap <b>Add</b>. The First 40 Days icon shows up next to your other apps.</div></li></ul>
+   <p class="small muted" style="margin:12px 2px 0">Already signed up in Safari? In the Home Screen app, open <b>My Shifts</b> and tap your name to bring your shifts over.</p>
+`);return}
+  openSheet(sheetHead("Add to your Home Screen","In Chrome:")+`<ul class="tips"><li><span>1</span><div>Tap the <b>⋮</b> menu at the top right.</div></li><li><span>2</span><div>Tap <b>Add to Home screen</b> (or <b>Install app</b>), then <b>Add</b>.</div></li></ul>`)}
 /* ---------- auto-updating calendars ---------- */
 const SITE=/github\.io$/.test(location.hostname)?location.origin+location.pathname.replace(/[^/]*$/,""):"https://thepatrickreardon-sys.github.io/Thefirst40days/";
 const FAMILY_ICS=SITE+"feed/"+FEED.split("/").pop();
@@ -710,7 +732,9 @@ function mealOpenRow(d,t,opts={}){return`<div class="row c-honey open"><div clas
 /* ---------- views ---------- */
 function hero(){
   const st=S.settings,t=today();let big,label,head,sub,pct=0;
-  if(!st.startDate){big="40";label="days";head="A circle of care";sub=`${mom} will add the baby's arrival date soon. You can already sign up to help.`}
+  const loose=!st.born&&String(st.dueText||"").trim();
+  if(loose){big="💛";label="on the way";head="Getting ready";sub=`Baby is expected ${esc(loose)}. The 40 days begin when she arrives.`}
+  else if(!st.startDate){big="40";label="days";head="A circle of care";sub=`${mom} will add the baby's arrival date soon. You can already sign up to help.`}
   else{const n=diffDays(st.startDate,t)+1;const nice=fmtDate(st.startDate,{weekday:"long",month:"long",day:"numeric"});
     if(n<1){big=String(1-n);label=(1-n)===1?"day to go":"days to go";head=st.born?"Welcome, little one":"Getting ready";sub=`${st.babyName?esc(st.babyName)+" is":"Baby is"} ${st.born?"here":"due"} ${nice}. The 40 days begin then.`}
     else if(n<=40){big=String(n);label="of 40";pct=n/40;head=st.born?(st.babyName?`${esc(st.babyName)} is ${n===1?"brand new":n-1+" day"+(n===2?"":"s")+" old"}`:`Day ${n}`):`Day ${n}`;sub=`${40-n===0?"Last day of":40-n+" days left in"} our first 40 days.`}
@@ -744,7 +768,7 @@ function homeView(){
   const openMeals=mealSlots().filter(s=>s.date>=t&&!mealFor(s.date,s.type)).slice(0,2);
   const soon=allItems().filter(i=>i.date>=t).sort((a,b)=>(a.date+(a.start||"")).localeCompare(b.date+(b.start||""))).slice(0,6);
   const st=S.settings;
-  let h=hero();
+  let h=hero()+installCard(true);
   if(pri.length)h+=`<section><div class="sec-h"><h2>★ Elena's priorities</h2><span class="aside">What would help most</span></div><div class="stack">${pri.map(n=>needRow(n,{showDate:true})).join("")}</div></section>`;
   h+=`<section><div class="sec-h"><h2>Open requests</h2><button class="linkbtn" data-act="tab" data-tab="schedule">See all</button></div><div class="stack">`+
     (rest.length||openMeals.length?rest.map(n=>needRow(n,{showDate:true})).join("")+openMeals.map(s=>mealOpenRow(s.date,s.type,{showDate:true})).join("")
@@ -908,13 +932,14 @@ function mineView(){
   h+=`</div></section>`;
   h+=`<section><div class="sec-h"><h2>My calendar</h2><span class="aside">${up.length} upcoming</span></div>${myGrid()}</section>`;
   if(past.length)h+=`<section><div class="sec-h"><h2>Thank you for these</h2><span class="aside">${past.length} done</span></div><div class="stack">${past.map(i=>itemRow(i,{showDate:true})).join("")}</div></section>`;
+  h+=installCard(false);
   h+=accountCard();
   h+=`<section><div class="card"><div class="admin-h"><h3>About you</h3></div>
    <form novalidate data-form="profile" class="form"><div class="two"><div class="field"><label class="lbl">Your name</label><input name="pname" required value="${esc(me.name||S.me.name||"")}" placeholder="How Elena knows you"></div>
    <div class="field"><label class="lbl">Phone <span class="opt">optional</span></label><input name="pphone" type="tel" value="${esc(me.phone||"")}" placeholder="So Elena can text you"></div></div>
    <div><button class="btn ghost" type="submit">Save</button></div></form></div></section>`;
   return h}
-const APP_VER="Nov 22 · v7";
+const APP_VER="Nov 22 · v9";
 function accountCard(){return accountCard0()+`<p class="small muted" style="text-align:center;margin:6px 0 0">App version ${APP_VER}${S.authUser?(S.authUser.isAnonymous?" · guest":" · "+esc((S.authUser.email||((S.authUser.providerData||[]).find(x=>x&&x.email)||{}).email||"no email")))+(S.isAdmin?" · manager":""):" · not connected"}</p>`}
 function accountCard0(){const u=S.authUser;
   if(u&&!u.isAnonymous)return`<section><div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Signed in</b><div class="small muted">${esc(u.email||"")}${S.isAdmin?" · can manage Elena's tab":""}</div></div><button class="btn ghost sm" data-act="signout">Sign out</button>${!u.emailVerified&&S.isAdmin?`<div class="banner warn" style="margin:12px 0 0"><span>✉️</span><div>Confirm your email to manage Elena's tab. <button class="linkbtn" data-act="verify">Send the email</button> · <button class="linkbtn" data-act="reloaduser">I've confirmed it</button></div></div>`:""}<details class="other-ways" style="width:100%"><summary>Set or change your password</summary><form novalidate data-form="setpw" class="form" style="margin-top:10px"><div class="field"><input name="pw" type="password" required minlength="6" autocomplete="new-password" placeholder="New password (6+ characters)"></div><button class="btn ghost sm" type="submit">Save password</button></form></details></div></section>`;
@@ -958,6 +983,7 @@ function elenaView(){
   h+=`<section><div class="card"><div class="admin-h"><span class="n">2</span><h3>Dates & family</h3></div>
    <form novalidate data-form="settings" class="form">
     <div class="two"><div class="field"><label class="lbl">Baby's arrival (or due) date</label><input type="date" name="startDate" value="${esc(st.startDate)}"></div><div class="field"><label class="lbl">Baby's name <span class="opt">optional</span></label><input name="babyName" value="${esc(st.babyName)}" placeholder="When you're ready to share"></div></div>
+    <div class="field"><label class="lbl">How to say when she's due <span class="opt">optional · e.g. around Christmas</span></label><input name="dueText" maxlength="60" value="${esc(st.dueText||"")}" placeholder="around Christmas"><small class="small muted" style="display:block;margin-top:6px">If you fill this in, helpers see these words instead of the exact date and a countdown. The date above still sets up the calendar.</small></div>
     <label class="toggle"><input type="checkbox" name="born" ${st.born?"checked":""}><div><b>Baby has arrived</b><small>Day 1 is the birthday — the 40 days count from there</small></div></label>
     <div class="field"><label class="lbl">Family line under the title</label><input name="family" value="${esc(st.family)}"></div>
     <div class="field"><label class="lbl">Welcome message</label><textarea name="welcome" rows="2" placeholder="A note to everyone helping">${esc(st.welcome)}</textarea></div>
@@ -1080,6 +1106,9 @@ function showCopy(txt){openSheet(sheetHead("Copy this","Select the text and copy
 document.addEventListener("click",async e=>{
   const a=e.target.closest("[data-act]");if(!e.target.closest("#pop")&&!(a&&(a.dataset.act==="selday"||a.dataset.act==="mealday"||a.dataset.act==="myday"||a.dataset.act==="anotherday")))closePop();if(!a)return;const act=a.dataset.act;if(a.closest("#pop")&&act!=="closepop")closePop();
   if(act==="close"){closeSheet();return}
+  if(act==="install"){installSheet();return}
+  if(act==="hideinstall"){try{localStorage.setItem("f40-hide-install","1")}catch(_){}render();toast("You can still add it from My Shifts");return}
+  if(act==="copylink"){copyText(SITE,"Link copied — paste it into Safari");return}
   if(act==="subbed"){try{localStorage.setItem("f40-sub","1")}catch(_){}setTimeout(render,1500);return}
   if(act==="resub"){try{localStorage.removeItem("f40-sub")}catch(_){}render();return}
   if(act==="acctsheet"){accountSheet();return}
@@ -1167,7 +1196,7 @@ document.addEventListener("submit",async e=>{
       const item={id:uid(),kind:"meal",mealType:type,date,start:fd.get("start"),dur:30,dish:String(fd.get("dish")||"").trim(),note:String(fd.get("note")||"").trim(),at:Date.now()};
       await saveMine(d=>{applyName(d,fd);d.items.push(item);return d});successSheet(item,"Dinner is on you — thank you!".replace("Dinner",MEALTYPES[type]))}
     else if(kind==="profile"){if(!guardWrite())return;await saveMine(d=>applyName(d,fd));toast("Saved")}
-    else if(kind==="settings"){const s=clone(S.settings);["startDate","babyName","family","welcome","address","visitNotes","talulahNotes"].forEach(k=>s[k]=String(fd.get(k)||"").trim());s.born=fd.has("born");await store.setSettings(s);toast("Saved")}
+    else if(kind==="settings"){const s=clone(S.settings);["startDate","dueText","babyName","family","welcome","address","visitNotes","talulahNotes"].forEach(k=>s[k]=String(fd.get(k)||"").trim());s.born=fd.has("born");await store.setSettings(s);toast("Saved")}
     else if(kind==="meals"){const s=clone(S.settings);s.meals={enabled:fd.has("enabled"),types:fd.getAll("types"),every:+fd.get("every")||1};["dropoff","household","allergies","loves","avoid","instructions"].forEach(k=>s.meals[k]=String(fd.get(k)||"").trim());if(!s.meals.types.length)s.meals.types=["dinner"];await store.setSettings(s);toast("Meal train saved")}
     else if(kind==="need"){const base={cat:fd.get("cat")||"other",title:String(fd.get("title")||"").trim(),start:fd.get("start"),dur:+fd.get("dur")||60,spots:+fd.get("spots")||1,priority:fd.has("priority"),note:String(fd.get("note")||"").trim()};
       const from=fd.get("date"),until=fd.get("until"),rep=fd.get("repeat");let ds=[from];
