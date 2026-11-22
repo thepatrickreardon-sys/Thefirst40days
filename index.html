@@ -349,6 +349,27 @@ section{margin-top:26px}
 .iconbtn{border:1px solid var(--line2);background:#fff;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-size:16px;color:var(--ink2)}
 .iconbtn.on{background:var(--rose);border-color:var(--rose);color:#fff}
 .foot{text-align:center;color:var(--muted);font-size:13px;margin-top:40px;font-family:var(--serif);font-style:italic}
+.prep-h{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
+.prep-h .ico{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:24px;flex:none}
+.prep-h h2{font-size:20px;line-height:1.2;margin:0}
+.prep-meta{font-size:13px;color:var(--muted);margin-top:4px}
+.prep-opts{display:flex;flex-direction:column;gap:8px}
+.prep-opt{text-align:left;border:1px solid var(--line);background:#fff;border-radius:14px;padding:12px 13px;font-size:14.5px;line-height:1.45;color:var(--ink2);position:relative}
+.prep-opt b{color:var(--ink)}
+.prep-opt .go{display:block;margin-top:6px;font-weight:600;font-size:13px;color:var(--rose-d)}
+.prep-opt:active{background:#FFF6F2}
+.prep-jump{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.ideas{margin-top:14px;background:#FBF7F2;border-radius:14px;padding:12px 13px}
+.ideas h4{margin:0 0 8px;font-size:15px}
+.idea-g{margin-bottom:6px}.idea-g small{display:block;font-weight:600;color:var(--muted);margin-bottom:5px}
+.prep-who{margin-top:14px;border-top:1px solid var(--line);padding-top:10px;font-size:14px;display:flex;flex-direction:column;gap:4px}
+.prep-who small{font-weight:600;color:var(--muted)}
+.prep-pick{display:flex;flex-direction:column;gap:8px}
+.pp{display:block;cursor:pointer}.pp input{position:absolute;opacity:0;pointer-events:none}
+.pp span{display:block;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;background:#fff}
+.pp span b{display:block;font-size:14.5px}.pp span small{display:block;color:var(--muted);font-size:12.5px;line-height:1.35;margin-top:2px}
+.pp:has(input:checked) span{border-color:var(--rose);background:#FFF6F2;box-shadow:0 0 0 3px var(--rose-s)}
+.idea-chips{margin-top:8px}.idea-chips .dish{border:0;cursor:pointer;font:inherit;font-size:13px}
 </style>
 </head>
 <body>
@@ -381,6 +402,47 @@ const CATS={
   night:{label:"Early or late help",icon:"🌙",color:"plum",hint:"Mornings, evenings, bedtime"},
   other:{label:"Something else",icon:"✨",color:"sage",hint:"Tell us what you have in mind"}
 };
+/* ---------- getting ready (before baby) ---------- */
+const PREP_INTRO={title:"Help Us Get Ready for Baby",text:"We’re getting the house, the freezer, and our little family ready to welcome baby girl. If you’d like to help, pick something that sounds like you. An hour playing with Lu, a soup for the freezer, an extra pair of hands for Patrick, or a really good hair braid would all make our lives a little sweeter right now."};
+const PREP={
+  lu:{label:"Hang Out With Lu",icon:"🧸",color:"honey",meta:["60–90 minutes","One helper","Confirm plans with Elena or Patrick"],dur:90,start:"09:30",
+    opts:[{k:"home",t:"Play at our house",d:"Hang out with Lu downstairs or in another space we agree on while I sort clothes, organize the bedroom, or get a few things done. Read books, do a little art project, build something, or have a dance party."},
+      {k:"adventure",t:"Take Lu on a little adventure",d:"Go for a walk, visit the playground, or head to the library. We’ll agree on where you’re going and how you’ll get there ahead of time."},
+      {k:"park",t:"Meet us at the park or preserve",d:"Come along and take the lead playing with Lu so I can get a little time to myself, even if it’s just a quiet loop through the woods."}],
+    foot:"We’ll share Lu’s routine and have her snacks ready. Morning slots usually work well around her nap.",allergy:true},
+  clothes:{label:"Organize Baby Clothes & Make Room",icon:"👕",color:"sky",meta:["60–90 minutes","One or two helpers"],dur:90,start:"10:00",
+    opts:[{k:"sort",t:"Sort baby clothes by size",d:"Fold and put away newborn and 0–3 month clothes so they’re easy to grab."},
+      {k:"bins",t:"Label bins & pack outgrown clothes",d:"Label bins for bigger sizes and pack up the clothes Lu has outgrown for attic storage."},
+      {k:"closet",t:"Swap seasonal clothes",d:"Help swap my spring and summer clothes for winter clothes and make room in our bedroom closet for clothes coming over from my other closet."},
+      {k:"shelves",t:"Clear the bedroom shelves & drawer",d:"Clear and organize the bedroom shelves and top underwear drawer. I can make the decisions about what goes where while you help sort, fold, and put things away."}]},
+  birth:{label:"Prepare the Birth Space & Help With Heavy Lifting",short:"Birth space & heavy lifting",icon:"📦",color:"sage",meta:["90 minutes","Two helpers"],dur:90,start:"10:00",
+    opts:[{k:"down",t:"Bring things down from the attic",d:"Bring down the home birth supply bin, newborn clothes, and remaining winter clothes from the attic."},
+      {k:"up",t:"Carry things up to the attic",d:"Carry up Lu’s outgrown clothes, packed-away seasonal clothes, and artwork we’re storing. Bring down the artwork I pick to hang."},
+      {k:"furniture",t:"Move furniture & clear space",d:"Help Patrick move furniture or heavy bins and clear space in the bedroom for the birth pool. Bring the little drum downstairs."},
+      {k:"supplies",t:"Set out linens & birth supplies",d:"Help set out towels and linens and organize the birth supplies where Patrick and I can easily find them."}]},
+  freezer:{label:"Stock the Postpartum Freezer",short:"Postpartum freezer",icon:"🍲",color:"honey",meta:["30-minute drop-off window","or 90-minute batch-cooking shift"],dur:30,start:"17:00",dish:true,
+    opts:[{k:"dropoff",t:"Drop off a freezer meal",d:"A family dinner, a few single portions, or something I can eat with one hand are all welcome. Porch drop-off is great.",dur:30},
+      {k:"cook",t:"Come cook with me",d:"We’ll agree on a recipe and ingredients ahead of time. Help chop, cook, portion, label, and get the kitchen back in order.",dur:90},
+      {k:"signature",t:"Make something you already love to cook",d:"If you make an incredible soup, stew, or breakfast burrito, tell me what it is. We’d love to try it.",dur:30}],
+    ideas:[["Soups and stews",["Chicken, white bean, and kale soup","Beef and vegetable stew","Lentil, tomato, and spinach soup"]],
+      ["Freezer dinners",["Turkey meatballs in tomato sauce with rice","Black bean and sweet potato enchiladas","Shredded chicken with roasted vegetables and quinoa"]],
+      ["Breakfasts and one-handed snacks",["Egg and spinach breakfast burritos","Apple-cinnamon baked oatmeal","Turkey and veggie mini frittatas"]]],
+    tip:"Think warming, filling, and easy to reheat. Meals with protein, a grain or starchy vegetable, and some produce are especially welcome. Beef, lentils, and beans are good options for iron-rich meals. Tomatoes and peppers add vitamin C to bean and lentil dishes, and eggs and beans contribute choline, which is especially relevant during breastfeeding.",
+    foot:"Please label the dish with its full ingredients, date, and reheating instructions. If you’re making something for Lu to share, check with us about ingredients and cross-contact first because of her food allergies.",allergy:true},
+  yard:{label:"Give Patrick a Hand With the Yard",short:"Yard help with Patrick",icon:"🍂",color:"sage",meta:["90–120 minutes","Two or three helpers"],dur:120,start:"10:00",
+    opts:[{k:"leaves",t:"Rake leaves & haul debris",d:"Rake leaves, pick up sticks, and bag or haul yard debris."},
+      {k:"walks",t:"Clear the walkways & entry",d:"Clear and sweep the walkways, steps, patio, and outdoor entry."},
+      {k:"furniture",t:"Store outdoor furniture",d:"Help move or store outdoor furniture, planters, and seasonal items."}],
+    foot:"If you’re handy or have a knack for getting an outdoor space back in shape, tell Patrick what you like doing. He’ll have a few jobs ready when you arrive."},
+  mama:{label:"Pamper & Honor the Mama",short:"Pamper the mama",icon:"🌸",color:"rose",meta:["30–90 minutes","One helper","Before or after baby arrives"],dur:60,start:"14:00",
+    opts:[{k:"home",t:"Pamper me at home",d:"Are you really good at braiding hair? Do you give a great neck or foot massage? Want to bring tea and sit with me? Yes, please.",dur:60},
+      {k:"time",t:"Give me a little time to myself",d:"Hang with Lu while I go get a facial, which I really want. After baby arrives, you could hold her nearby while I take a shower or get a freaking ten-minute foot massage. We’ll see what works that day.",dur:180},
+      {k:"outside",t:"Get outside with me",d:"Come for a walk and some adult conversation, or meet me and Lu at the park or preserve. You can play with her while I take a little walk in the woods by myself.",dur:90},
+      {k:"moment",t:"Help me mark the moment",d:"Bring flowers, write me a note to open after the birth, or share a small blessing with me over tea.",dur:30}]}
+};
+const PREP_NOTE={lbl:"What would you love to help with?",ph:"Pick an option above or tell us what you’re really good at. Maybe you’re a champion drawer organizer, make a legendary stew, love taking toddlers on little adventures, or know how to make someone feel cared for. If you have an idea we haven’t listed, we’d love to hear it."};
+const catInfo=k=>CATS[k]||PREP[k]||CATS.other;
+const prepOpt=i=>{const c=PREP[i.cat];return c&&(c.opts.find(o=>o.k===i.opt))};
 const MEAL={icon:"🥘",color:"honey"};
 const MEALTYPES={breakfast:"Breakfast",lunch:"Lunch",dinner:"Dinner"};
 const FILTERS=[["all","Everything"],["open","Needs help"],["meals","Meals"],["talulah","Talulah"],["house","House help"],["care","Elena & baby"]];
@@ -459,7 +521,7 @@ function evInfo(i){
   const st=S.settings;let title,details=[];
   if(i.kind==="meal"){title=`Bring ${(MEALTYPES[i.mealType]||"a meal").toLowerCase()} to ${mom} & family`;if(i.dish)details.push("Bringing: "+i.dish);
     if(st.meals.instructions)details.push("Drop-off: "+st.meals.instructions);if(st.meals.allergies)details.push("Allergies: "+st.meals.allergies)}
-  else{const c=CATS[i.cat]||CATS.other;title=`${i.title||c.label} — for ${mom}`;}
+  else{const c=catInfo(i.cat);title=`${i.title||c.label} — for ${mom}`;if(PREP[i.cat]){details.push("Getting ready: "+c.label);if(i.dish)details.push("Bringing: "+i.dish);if(c.allergy&&st.meals.allergies)details.push("Allergies: "+st.meals.allergies)}}
   if(i.note)details.push("Note: "+i.note);
   details.push("From The First 40 Days sign-up");
   return{title,details:details.join("\n"),loc:st.address||"",date:i.date,start:i.start||"17:00",dur:+i.dur||(i.kind==="meal"?30:60)};
@@ -515,7 +577,7 @@ function googleSteps(f){return sheetHead("Almost there 📅","Your calendar file
   <li><span>🔁</span><div>Import again whenever new sign-ups come in.</div></li></ul>
   <div class="mt"><button class="btn primary block" data-act="close">Got it</button></div>`}
 function familyEvents(){const ev=allItems().map(i=>itemEvent(i,true));
-  S.needs.filter(n=>isOpen(n)).forEach(n=>{const c=CATS[n.cat]||CATS.other;ev.push(vevent("need-"+n.id,`${n.priority?"★ ":""}Open: ${n.title||c.label}`,n.date,n.start,+n.dur||60,n.note||"",S.settings.address))});return ev}
+  S.needs.filter(n=>isOpen(n)).forEach(n=>{const c=catInfo(n.cat);ev.push(vevent("need-"+n.id,`${n.priority?"★ ":""}Open: ${n.title||c.label}`,n.date,n.start,+n.dur||60,n.note||"",S.settings.address))});return ev}
 function myEvents(){return(mine().items||[]).filter(i=>i.date>=today()).map(i=>itemEvent({...i,uid:S.me.id}))}
 function syncSheet(){
   if(!S.syncScope)S.syncScope=(mine().items||[]).length?"mine":"family";
@@ -556,10 +618,11 @@ const NAVICONS={
   schedule:ICON_G.replace('stroke-width="2"','stroke-width="1.9"'),
   meals:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18a8 8 0 0 1-8 8h-2a8 8 0 0 1-8-8z"/><path d="M8 8c0-1.5 1-1.5 1-3M12 8c0-1.5 1-1.5 1-3M16 8c0-1.5 1-1.5 1-3"/></svg>',
   mine:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>',
+  prep:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V11"/><path d="M12 11c0-4 3-7 8-7 0 5-3 7-8 7z"/><path d="M12 14c0-3-2.5-5-7-5 0 4 2.5 5 7 5z"/></svg>',
   elena:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 20s-7-4.4-9-9.2C1.7 7.5 3.8 4 7.2 4c2 0 3.4 1.1 4.8 2.8C13.4 5.1 14.8 4 16.8 4c3.4 0 5.5 3.5 4.2 6.8C19 15.6 12 20 12 20z"/></svg>'
 };
 function renderTabs(){
-  const tabs=[["home","Home"],["schedule","Schedule"],["meals","Meal Train"],["mine","My Shifts"]];
+  const tabs=[["home","Home"],["prep","Get Ready"],["schedule","Schedule"],["meals","Meal Train"],["mine","My Shifts"]];
   if(S.isAdmin)tabs.push(["elena","Elena"]);
   $("#tabs").innerHTML=tabs.map(([k,l])=>`<button class="${S.tab===k?"on":""}" data-act="tab" data-tab="${k}">${NAVICONS[k]}<span>${l}</span></button>`).join("");
 }
@@ -583,7 +646,7 @@ function guardWrite(){if(!S.me.id){toast("Still connecting — try again in a se
 
 /* ---------- rows ---------- */
 function needRow(n,opts={}){
-  const c=CATS[n.cat]||CATS.other,cl=claimsFor(n),open=isOpen(n),spots=+n.spots||1;
+  const c=catInfo(n.cat),cl=claimsFor(n),open=isOpen(n),spots=+n.spots||1;
   const mineClaim=cl.find(x=>x.uid===S.me.id);
   const who=cl.length?cl.map(x=>`<span class="who">${esc(nameOf(x.uid))}</span>`).join(", "):"";
   const when=(opts.showDate?`${fmtDate(n.date)} · `:"")+fmtRange(n.start,n.dur);
@@ -598,7 +661,7 @@ function needRow(n,opts={}){
     ${n.note?`<div class="rn">${esc(n.note)}</div>`:""}</div>
    <div class="ra">${act}</div></div>`}
 function itemRow(i,opts={}){
-  const isMeal=i.kind==="meal";const c=isMeal?MEAL:(CATS[i.cat]||CATS.other);
+  const isMeal=i.kind==="meal";const c=isMeal?MEAL:(catInfo(i.cat));
   const t=isMeal?`${MEALTYPES[i.mealType]||"Meal"}: ${esc(i.dish||"A homemade meal")}`:esc(i.title||c.label);
   const when=(opts.showDate?`${fmtDate(i.date)} · `:"")+(isMeal?`drop-off ~${fmtTime(i.start||"17:00")}`:fmtRange(i.start,i.dur));
   return`<div class="row c-${c.color}"${opts.flat?' style="border:0;padding:0;background:none"':""}><div class="ico">${c.icon}</div>
@@ -650,6 +713,7 @@ function homeView(){
   h+=`<section><div class="sec-h"><h2>Open requests</h2><button class="linkbtn" data-act="tab" data-tab="schedule">See all</button></div><div class="stack">`+
     (rest.length||openMeals.length?rest.map(n=>needRow(n,{showDate:true})).join("")+openMeals.map(s=>mealOpenRow(s.date,s.type,{showDate:true})).join("")
      :`<div class="empty">Nothing open right now — but you can always <button class="linkbtn" data-act="help">offer your own time</button>.</div>`)+`</div></section>`;
+  if(!st.born)h+=`<section><div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:linear-gradient(160deg,#fff,#F4F8F2)"><div style="font-size:30px">🌱</div><div style="flex:1;min-width:200px"><b>Help us get ready for baby</b><div class="small muted">Play with Lu, stock the freezer, help with the yard or pamper Elena before the big day.</div></div><button class="btn primary sm" data-act="tab" data-tab="prep">See how</button></div></section>`;
   h+=coverage();
   h+=`<section><div class="sec-h"><h2>Coming up</h2><span class="aside">Who's helping</span></div><div class="stack">${soon.length?soon.map(i=>itemRow(i,{showDate:true})).join(""):`<div class="empty">No one's on the schedule yet. Be the first!</div>`}</div></section>`;
   const tips=String(st.visitNotes||"").split("\n").filter(Boolean);
@@ -662,8 +726,8 @@ function homeView(){
 function matchFilter(kind,cat){const f=S.filter;if(f==="all")return true;if(f==="meals")return kind==="meal";if(f==="open")return false;return(FILTER_CATS[f]||[]).includes(cat)}
 function dayRows(d){
   const rows=[],items=allItems();
-  S.needs.filter(n=>n.date===d).forEach(n=>{if(S.filter==="open"?isOpen(n):matchFilter("help",n.cat))rows.push([n.start,needRow(n),{cls:(CATS[n.cat]||CATS.other).color,icon:(CATS[n.cat]||CATS.other).icon,t:n.title||(CATS[n.cat]||CATS.other).label,open:isOpen(n),pri:n.priority&&isOpen(n)}])});
-  items.filter(i=>i.date===d&&!(i.needId&&S.needs.some(n=>n.id===i.needId))).forEach(i=>{if(S.filter!=="open"&&matchFilter(i.kind,i.cat)){const m=i.kind==="meal";const c=m?MEAL:(CATS[i.cat]||CATS.other);rows.push([i.start||"17:00",itemRow(i),{cls:c.color,icon:c.icon,t:m?(i.dish||MEALTYPES[i.mealType]):(i.title||c.label)}])}});
+  S.needs.filter(n=>n.date===d).forEach(n=>{if(S.filter==="open"?isOpen(n):matchFilter("help",n.cat))rows.push([n.start,needRow(n),{cls:(catInfo(n.cat)).color,icon:(catInfo(n.cat)).icon,t:n.title||(catInfo(n.cat)).label,open:isOpen(n),pri:n.priority&&isOpen(n)}])});
+  items.filter(i=>i.date===d&&!(i.needId&&S.needs.some(n=>n.id===i.needId))).forEach(i=>{if(S.filter!=="open"&&matchFilter(i.kind,i.cat)){const m=i.kind==="meal";const c=m?MEAL:(catInfo(i.cat));rows.push([i.start||"17:00",itemRow(i),{cls:c.color,icon:c.icon,t:m?(i.dish||MEALTYPES[i.mealType]):(i.title||c.label)}])}});
   mealSlots().filter(s=>s.date===d&&!mealFor(s.date,s.type)).forEach(s=>{if(S.filter==="all"||S.filter==="meals"||S.filter==="open")rows.push([s.type==="dinner"?"17:00":s.type==="lunch"?"12:00":"08:00",mealOpenRow(s.date,s.type),{cls:"honey",icon:MEAL.icon,t:MEALTYPES[s.type],open:true}])});
   rows.sort((x,y)=>x[0].localeCompare(y[0]));return rows}
 function dayBlock(d,force){const t=today(),rows=dayRows(d);if(!force&&S.filter!=="all"&&!rows.length)return"";
@@ -694,9 +758,9 @@ function dayMenu(d){
   const openMeals=mealSlots().filter(x=>x.date===d&&!mealFor(x.date,x.type));
   let h=`<div class="dm-h"><div class="day-n"><small>DAY</small><b>${dayNum(d)}</b></div><div><h3>${fmtDate(d,{weekday:"long",month:"short",day:"numeric"})}</h3><p>${d===t?"Today · ":""}${its.length?its.length+" helping":"No one yet"}</p></div><button class="x" data-act="closepop" aria-label="Close">×</button></div>`;
   if(openNeeds.length||openMeals.length){h+=`<div class="dm-sub">Elena could use</div>`;
-    h+=openNeeds.map(n=>{const c=CATS[n.cat]||CATS.other;return`<div class="dm-open ${n.priority?"pri":""}"><span style="font-size:20px">${c.icon}</span><div class="tx"><b>${n.priority?"★ ":""}${esc(n.title||c.label)}</b><span>${fmtRange(n.start,n.dur)}</span></div><button class="btn ${n.priority?"primary":"soft"} sm" data-act="claim" data-id="${esc(n.id)}">I'll do it</button></div>`}).join("");
+    h+=openNeeds.map(n=>{const c=catInfo(n.cat);return`<div class="dm-open ${n.priority?"pri":""}"><span style="font-size:20px">${c.icon}</span><div class="tx"><b>${n.priority?"★ ":""}${esc(n.title||c.label)}</b><span>${fmtRange(n.start,n.dur)}</span></div><button class="btn ${n.priority?"primary":"soft"} sm" data-act="claim" data-id="${esc(n.id)}">I'll do it</button></div>`}).join("");
     h+=openMeals.map(m=>`<div class="dm-open"><span style="font-size:20px">${MEAL.icon}</span><div class="tx"><b>${MEALTYPES[m.type]} needed</b><span>Meal train · ${esc(S.settings.meals.dropoff||"")}</span></div><button class="btn soft sm" data-act="meal" data-date="${d}" data-type="${m.type}">Bring it</button></div>`).join("")}
-  if(its.length){h+=`<div class="dm-sub">Already helping</div>`+its.map(i=>{const m=i.kind==="meal",c=m?MEAL:(CATS[i.cat]||CATS.other);
+  if(its.length){h+=`<div class="dm-sub">Already helping</div>`+its.map(i=>{const m=i.kind==="meal",c=m?MEAL:(catInfo(i.cat));
     return`<div class="dm-line"><span>${c.icon}</span><span><b>${esc(nameOf(i.uid))}</b> · ${esc(m?(i.dish||MEALTYPES[i.mealType]):(i.title||c.label))}</span><span class="tm">${m?"~"+fmtTime(i.start||"17:00"):fmtTime(i.start)}</span></div>`}).join("")}
   h+=`<div class="dm-sub">What would you like to do?</div><div class="tiles">`;
   if(S.settings.meals.enabled&&openMeals.length)h+=`<button class="tile meal" data-act="meal" data-date="${d}" data-type="${openMeals[0].type}"><span class="ti">${MEAL.icon}</span>Bring a meal</button>`;
@@ -739,14 +803,14 @@ function gridShell(cellFn,cls,hint,legend){
 function myGrid(){
   const t=today(),its=(mine().items||[]);
   return gridShell((k,mon)=>{const mi=its.filter(i=>i.date===k).sort((a,b)=>(a.start||"").localeCompare(b.start||""));
-    const pills=mi.slice(0,3).map(i=>{const m=i.kind==="meal",c=m?MEAL:(CATS[i.cat]||CATS.other);return`<span class="pill ${c.color}">${c.icon}<span class="pt">${m?"~"+fmtTime(i.start||"17:00"):fmtTime(i.start)}</span></span>`}).join("");
+    const pills=mi.slice(0,3).map(i=>{const m=i.kind==="meal",c=m?MEAL:(catInfo(i.cat));return`<span class="pill ${c.color}">${c.icon}<span class="pt">${m?"~"+fmtTime(i.start||"17:00"):fmtTime(i.start)}</span></span>`}).join("");
     return`<button class="cc ${k===t?"today":""} ${k<t?"past":""} ${mi.length?"mine":""}" data-act="myday" data-date="${k}"><div class="cd"><b>${parse(k).getDate()}</b><small>D${dayNum(k)}</small></div>${mon}<div class="pills">${pills}</div>${mi.length>3?`<span class="more">+${mi.length-3}</span>`:""}</button>`},
    "mycal","Tap any day",`<div class="cal-legend"><span><i style="background:#fff;box-shadow:inset 0 0 0 2px var(--rose)"></i>Days you're helping</span></div>`)}
 function myDayMenu(d){
   const mi=(mine().items||[]).filter(i=>i.date===d).map(i=>({...i,uid:S.me.id})).sort((a,b)=>(a.start||"").localeCompare(b.start||""));
   if(!mi.length)return dayMenu(d);
   let h=`<div class="dm-h"><div class="day-n"><small>DAY</small><b>${dayNum(d)}</b></div><div><h3>${fmtDate(d,{weekday:"long",month:"short",day:"numeric"})}</h3><p>You're helping ${mi.length===1?"once":mi.length+" times"}</p></div><button class="x" data-act="closepop" aria-label="Close">×</button></div>`;
-  h+=mi.map(i=>{const m=i.kind==="meal",c=m?MEAL:(CATS[i.cat]||CATS.other);
+  h+=mi.map(i=>{const m=i.kind==="meal",c=m?MEAL:(catInfo(i.cat));
     return`<div class="dm-open" style="border-style:solid;flex-wrap:wrap"><span style="font-size:20px">${c.icon}</span><div class="tx"><b>${esc(m?`${MEALTYPES[i.mealType]}: ${i.dish||"a meal"}`:(i.title||c.label))}</b><span>${m?"Drop-off ~"+fmtTime(i.start||"17:00"):fmtRange(i.start,i.dur)}</span></div>${d>=today()?`<button class="btn ghost sm" data-act="cancel" data-id="${esc(i.id)}">Cancel</button>`:""}<div style="width:100%;margin-top:8px">${calLinks(i)}</div></div>`}).join("");
   if(d>=today())h+=`<div class="dm-foot"><button class="btn soft sm" data-act="anotherday" data-date="${d}">＋ Add something else this day</button></div>`;
   return h}
@@ -812,7 +876,7 @@ function mineView(){
    <div class="field"><label class="lbl">Phone <span class="opt">optional</span></label><input name="pphone" type="tel" value="${esc(me.phone||"")}" placeholder="So Elena can text you"></div></div>
    <div><button class="btn ghost" type="submit">Save</button></div></form></div></section>`;
   return h}
-const APP_VER="Nov 15 · v3";
+const APP_VER="Nov 22 · v4";
 function accountCard(){return accountCard0()+`<p class="small muted" style="text-align:center;margin:6px 0 0">App version ${APP_VER}${S.authUser?(S.authUser.isAnonymous?" · guest":" · "+esc((S.authUser.email||((S.authUser.providerData||[]).find(x=>x&&x.email)||{}).email||"no email")))+(S.isAdmin?" · manager":""):" · not connected"}</p>`}
 function accountCard0(){const u=S.authUser;
   if(u&&!u.isAnonymous)return`<section><div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Signed in</b><div class="small muted">${esc(u.email||"")}${S.isAdmin?" · can manage Elena's tab":""}</div></div><button class="btn ghost sm" data-act="signout">Sign out</button></div></section>`;
@@ -843,7 +907,7 @@ function elenaView(){
     <button class="btn primary block" type="submit">Post request</button></form></div></section>`;
   // requests list
   h+=`<section><div class="sec-h"><h2>Your requests</h2><span class="aside">${needs.filter(isOpen).length} open</span></div><div class="stack">`+
-   (needs.length?needs.map(n=>{const c=CATS[n.cat]||CATS.other;const cl=claimsFor(n);return`<div class="row c-${c.color} ${n.priority?"pri":""}"><div class="ico">${c.icon}</div><div class="rb"><div class="rt">${esc(n.title||c.label)}</div><div class="rm">${fmtDate(n.date)} · ${fmtRange(n.start,n.dur)} · ${cl.length?cl.map(x=>esc(nameOf(x.uid))).join(", "):"open"}</div></div>
+   (needs.length?needs.map(n=>{const c=catInfo(n.cat);const cl=claimsFor(n);return`<div class="row c-${c.color} ${n.priority?"pri":""}"><div class="ico">${c.icon}</div><div class="rb"><div class="rt">${esc(n.title||c.label)}</div><div class="rm">${fmtDate(n.date)} · ${fmtRange(n.start,n.dur)} · ${cl.length?cl.map(x=>esc(nameOf(x.uid))).join(", "):"open"}</div></div>
     <div class="ra"><button class="iconbtn ${n.priority?"on":""}" data-act="pri" data-id="${esc(n.id)}" title="Toggle priority">★</button><button class="iconbtn" data-act="delneed" data-id="${esc(n.id)}" title="Remove">🗑</button></div></div>`}).join(""):`<div class="empty">No requests yet. Add one above.</div>`)+`</div></section>`;
   // dates & family
   h+=`<section><div class="card"><div class="admin-h"><span class="n">2</span><h3>Dates & family</h3></div>
@@ -879,11 +943,41 @@ function elenaView(){
    (signups.length?signups.map(i=>{const p={phone:(S.contacts[i.uid]||{}).phone};return itemRow(i,{showDate:true,actions:`<div class="ra">${p.phone?`<span class="small muted">${esc(p.phone)}</span>`:""}<button class="iconbtn" data-act="rmitem" data-id="${esc(i.id)}" data-uid="${esc(i.uid)}" title="Remove">🗑</button></div>`})}).join(""):`<div class="empty">No sign-ups yet.</div>`)+`</div></section>`;
   return h}
 
+function prepSignups(k){const t=today();return allItems().filter(i=>i.kind==="prep"&&i.cat===k&&i.date>=t).sort((a,b)=>(a.date+(a.start||"")).localeCompare(b.date+(b.start||"")))}
+function prepCard(k){const c=PREP[k],st=S.settings,ups=prepSignups(k);
+  let h=`<section><div class="card prep c-${c.color}"><div class="prep-h"><div class="ico">${c.icon}</div><div><h2>${esc(c.label)}</h2><div class="prep-meta">${c.meta.map(esc).join(" · ")}</div></div></div>
+   <div class="prep-opts">${c.opts.map(o=>`<button class="prep-opt" data-act="prep" data-k="${k}" data-o="${o.k}"><b>${esc(o.t)}.</b> ${esc(o.d)}<span class="go">Sign up ›</span></button>`).join("")}</div>`;
+  if(c.ideas)h+=`<div class="ideas"><h4>What you could bring</h4>${c.ideas.map(([g,xs])=>`<div class="idea-g"><small>${esc(g)}</small><div>${xs.map(x=>`<span class="dish">${esc(x)}</span>`).join("")}</div></div>`).join("")}<p class="small muted" style="margin:10px 0 0">${esc(c.tip)}</p></div>`;
+  if(c.foot)h+=`<div class="note mt"><p>${esc(c.foot)}</p></div>`;
+  if(c.allergy&&st.meals.allergies)h+=`<div class="note alert mt"><h4>⚠️ Lu’s food allergies</h4><p>${esc(st.meals.allergies)}</p></div>`;
+  if(ups.length)h+=`<div class="prep-who"><small>Signed up</small>${ups.map(i=>`<div>${fmtDate(i.date)} · ${fmtTime(i.start)} · <span class="${i.uid===S.me.id?"you":"who"}">${esc(nameOf(i.uid))}</span> — ${esc(i.title||"")}${i.dish?` (${esc(i.dish)})`:""}</div>`).join("")}</div>`;
+  h+=`<div style="margin-top:14px"><button class="btn primary block" data-act="prep" data-k="${k}">Sign up for this</button></div></div></section>`;
+  return h}
+function prepView(){
+  let h=`<section><div class="card" style="background:linear-gradient(160deg,#fff,#FFF5F0)"><h2>${esc(PREP_INTRO.title)}</h2><p class="muted" style="margin:8px 0 14px">${esc(PREP_INTRO.text)}</p>
+   <div class="prep-jump">${Object.entries(PREP).map(([k,c])=>`<button class="tile" data-act="prepjump" data-k="${k}"><span class="ti">${c.icon}</span>${esc(c.short||c.label)}</button>`).join("")}</div></div></section>`;
+  for(const k in PREP)h+=`<div id="prep-${k}">${prepCard(k)}</div>`;
+  h+=`<section><div class="card"><h3 style="margin:0 0 6px">Something else in mind?</h3><p class="small muted" style="margin:0 0 12px">${esc(PREP_NOTE.ph)}</p><button class="btn ghost block" data-act="prep" data-k="mama" data-o="" data-free="1">Tell us your idea</button></div></section>`;
+  return h}
+function prepSheet(k,o,free){
+  if(!guardWrite())return;const c=PREP[k];if(!c)return;const st=S.settings;
+  const sel=c.opts.find(x=>x.k===o)||(free?null:c.opts[0]);
+  const t=today(),tm=addDays(t,1);
+  openSheet(sheetHead(`${c.icon} ${esc(free?"Your own idea":c.label)}`,free?"Tell us what you’re good at and when you could come.":esc(c.meta.join(" · ")))+
+  `<form novalidate data-form="prep" class="form"><input type="hidden" name="k" value="${k}">
+   ${free?`<input type="hidden" name="opt" value="idea">`:`<div class="prep-pick">${c.opts.map(x=>`<label class="pp"><input type="radio" name="opt" value="${x.k}" data-dur="${x.dur||c.dur}" ${sel&&x.k===sel.k?"checked":""}><span><b>${esc(x.t)}</b><small>${esc(x.d)}</small></span></label>`).join("")}</div>`}
+   ${c.dish&&!free?`<div class="field"><label class="lbl">What are you making? <span class="opt">optional</span></label><input name="dish" maxlength="80" placeholder="e.g. Beef and vegetable stew"><div class="idea-chips">${c.ideas.flatMap(g=>g[1]).map(x=>`<button type="button" class="dish" data-act="pickdish" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>`:""}
+   <div class="two"><div class="field"><label class="lbl">Day</label><input type="date" name="date" required min="${t}" value="${tm}"></div><div class="field"><label class="lbl">Start time</label>${timeSelect("start",c.start||"10:00")}</div></div>
+   <div><label class="lbl">For how long?</label>${durChips("dur",(sel&&sel.dur)||c.dur)}</div>
+   <div class="field"><label class="lbl">${esc(PREP_NOTE.lbl)} <span class="opt">${free?"":"optional"}</span></label><textarea name="note" rows="3" maxlength="500" ${free?"required":""} placeholder="${esc(free?PREP_NOTE.ph:"Anything Elena or Patrick should know")}"></textarea></div>
+   ${c.allergy&&st.meals.allergies&&!free?`<div class="note alert"><h4>⚠️ If you’re cooking or bringing snacks</h4><p>${esc(st.meals.allergies)}</p></div>`:""}
+   ${nameFields()}
+   <button class="btn primary block" type="submit">Sign me up</button></form>`)}
 function render(){
   renderTabs();renderBanners();
   $("#familyLine").textContent=S.settings.family||"A circle of care for Elena & family";
   if(S.live&&!(S.loaded.s&&S.loaded.n&&S.loaded.p)&&!S.stale){$("#main").innerHTML=`<div class="loading"><div class="spin"></div>Gathering the schedule…</div>`;return}
-  const v={home:homeView,schedule:scheduleView,meals:mealsView,mine:mineView,elena:elenaView}[S.tab]||homeView;
+  const v={home:homeView,prep:prepView,schedule:scheduleView,meals:mealsView,mine:mineView,elena:elenaView}[S.tab]||homeView;
   $("#main").innerHTML=v();
 }
 
@@ -901,7 +995,7 @@ function helpSheet(date,cat){
    ${nameFields()}
    <button class="btn primary block" type="submit">Sign me up</button></form>`)}
 function claimSheet(id){
-  if(!guardWrite())return;const n=S.needs.find(x=>x.id===id);if(!n)return;const c=CATS[n.cat]||CATS.other;
+  if(!guardWrite())return;const n=S.needs.find(x=>x.id===id);if(!n)return;const c=catInfo(n.cat);
   openSheet(sheetHead(`${c.icon} ${esc(n.title||c.label)}`,`${fmtDate(n.date,{weekday:"long",month:"long",day:"numeric"})} · ${fmtRange(n.start,n.dur)}`)+
   (n.priority?`<div class="banner" style="background:var(--rose-s);color:var(--rose-d);margin:0 0 14px"><span>★</span><div>This is one of Elena's priorities — thank you!</div></div>`:"")+
   (n.note?`<div class="note" style="margin-bottom:14px"><h4>From Elena</h4><p>${esc(n.note)}</p></div>`:"")+
@@ -945,6 +1039,9 @@ document.addEventListener("click",async e=>{
   if(act==="rmadmin"){try{await S.db.doc("admins/"+a.dataset.email).delete();toast("Removed")}catch(e){handleErr(e)}return}
   if(act==="tab"){closeSheet();S.tab=a.dataset.tab;render();window.scrollTo({top:0,behavior:"smooth"});return}
   if(act==="help")return helpSheet(a.dataset.date,a.dataset.cat);
+  if(act==="prep")return prepSheet(a.dataset.k,a.dataset.o,a.dataset.free==="1");
+  if(act==="prepjump"){const el=document.getElementById("prep-"+a.dataset.k);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});return}
+  if(act==="pickdish"){const f=a.closest("form");if(f&&f.dish)f.dish.value=a.dataset.v;return}
   if(act==="meal")return mealSheet(a.dataset.date,a.dataset.type);
   if(act==="claim")return claimSheet(a.dataset.id);
   if(act==="filter"){S.filter=a.dataset.f;render();return}
@@ -972,7 +1069,7 @@ document.addEventListener("click",async e=>{
   if(act==="docancel"){const id=a.dataset.id;try{await saveMine(d=>{d.items=d.items.filter(x=>x.id!==id);return d});closeSheet();toast("Cancelled — thanks for letting us know")}catch(_){}return}
   if(act==="pri"){const n=S.needs.find(x=>x.id===a.dataset.id);if(n)try{await store.setNeed({...n,priority:!n.priority});toast(n.priority?"Priority removed":"Marked as priority ★")}catch(_){}return}
   if(act==="delneed"){const n=S.needs.find(x=>x.id===a.dataset.id);if(!n)return;
-    openSheet(sheetHead("Remove this request?",esc(n.title||(CATS[n.cat]||CATS.other).label)+" · "+fmtDate(n.date))+`<p class="muted">${claimsFor(n).length?"Anyone already signed up keeps their spot on the schedule.":""}</p><div class="calrow"><button class="btn primary" data-act="dodelneed" data-id="${esc(n.id)}">Remove</button><button class="btn ghost" data-act="close">Keep</button></div>`);return}
+    openSheet(sheetHead("Remove this request?",esc(n.title||(catInfo(n.cat)).label)+" · "+fmtDate(n.date))+`<p class="muted">${claimsFor(n).length?"Anyone already signed up keeps their spot on the schedule.":""}</p><div class="calrow"><button class="btn primary" data-act="dodelneed" data-id="${esc(n.id)}">Remove</button><button class="btn ghost" data-act="close">Keep</button></div>`);return}
   if(act==="dodelneed"){try{await store.delNeed(a.dataset.id);closeSheet();toast("Request removed")}catch(_){}return}
   if(act==="rmitem"){const u=a.dataset.uid,id=a.dataset.id;const p=clone(S.people[u]);if(!p.items)return;
     openSheet(sheetHead("Remove this sign-up?",esc(nameOf(u)))+`<div class="calrow"><button class="btn primary" data-act="dormitem" data-id="${esc(id)}" data-uid="${esc(u)}">Remove</button><button class="btn ghost" data-act="close">Keep</button></div>`);return}
@@ -993,6 +1090,10 @@ document.addEventListener("submit",async e=>{
     if(kind==="admin"){const em=String(fd.get("email")||"").trim().toLowerCase();if(!em)return;await S.db.doc("admins/"+em).set({addedAt:Date.now()});f.reset();toast("Added — they'll get Elena's tab after signing in with that email");return}
     if(kind==="help"){const item={id:uid(),kind:"help",cat:fd.get("cat")||"other",title:String(fd.get("title")||"").trim(),date:fd.get("date"),start:fd.get("start"),dur:+fd.get("dur")||60,note:String(fd.get("note")||"").trim(),at:Date.now()};
       await saveMine(d=>{applyName(d,fd);d.items.push(item);return d});successSheet(item)}
+    else if(kind==="prep"){const k=fd.get("k"),c=PREP[k];const ok=String(fd.get("opt")||"");const o=c.opts.find(x=>x.k===ok);
+      const free=ok==="idea";const item={id:uid(),kind:free?"help":"prep",cat:free?"other":k,opt:ok,title:o?o.t:"Getting-ready idea",date:fd.get("date"),start:fd.get("start"),dur:+fd.get("dur")||c.dur,note:String(fd.get("note")||"").trim(),at:Date.now()};
+      const dish=String(fd.get("dish")||"").trim();if(dish)item.dish=dish;
+      await saveMine(d=>{applyName(d,fd);d.items.push(item);return d});successSheet(item,"Thank you for helping us get ready!")}
     else if(kind==="claim"){const n=S.needs.find(x=>x.id===fd.get("id"));if(!n)throw 0;if(!isOpen(n)){toast("Someone just took that one — thank you anyway!");closeSheet();return}
       const item={id:uid(),kind:"help",needId:n.id,cat:n.cat,title:n.title||"",date:n.date,start:n.start,dur:+n.dur,note:String(fd.get("note")||"").trim(),at:Date.now()};
       await saveMine(d=>{applyName(d,fd);d.items.push(item);return d});successSheet(item,"Thank you — it's yours!")}
@@ -1010,6 +1111,7 @@ document.addEventListener("submit",async e=>{
       f.reset();toast(ds.length>1?`Posted ${ds.length} requests`:"Request posted")}
   }catch(err){if(!(err&&err._shown)){console.warn(err);toast("Something went wrong"+(err&&err.code?" ("+err.code+")":"")+" — please try again.",4500)}}finally{if(btn){btn.disabled=false;if(label)btn.textContent=label}}
 });
+document.addEventListener("change",e=>{const r=e.target;if(r.name==="opt"&&r.dataset.dur){const d=r.form.querySelector(`input[name="dur"][value="${r.dataset.dur}"]`);if(d)d.checked=true}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeSheet();closePop()}});
 
 /* ---------- boot ---------- */

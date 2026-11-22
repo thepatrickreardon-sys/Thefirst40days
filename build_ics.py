@@ -20,6 +20,8 @@ CATS = {
     "laundry": "Laundry", "cleaning": "Tidy & clean", "cook": "Cook a meal here",
     "serve": "Serve a meal", "errands": "Groceries & errands", "company": "Hang out",
     "night": "Early or late help", "other": "Something else",
+    "lu": "Hang out with Lu", "clothes": "Organize baby clothes", "birth": "Birth space & heavy lifting",
+    "freezer": "Stock the postpartum freezer", "yard": "Yard help with Patrick", "mama": "Pamper the mama",
 }
 MEALS = {"breakfast": "Breakfast", "lunch": "Lunch", "dinner": "Dinner"}
 
