@@ -370,6 +370,7 @@ section{margin-top:26px}
 .pp span b{display:block;font-size:14.5px}.pp span small{display:block;color:var(--muted);font-size:12.5px;line-height:1.35;margin-top:2px}
 .pp:has(input:checked) span{border-color:var(--rose);background:#FFF6F2;box-shadow:0 0 0 3px var(--rose-s)}
 .idea-chips{margin-top:8px}.idea-chips .dish{border:0;cursor:pointer;font:inherit;font-size:13px}
+.namechips{display:flex;flex-wrap:wrap}.namechips .dish{border:0;cursor:pointer;font:inherit;font-size:14px}
 </style>
 </head>
 <body>
@@ -486,6 +487,12 @@ const dayNum=d=>diffDays(start(),d)+1;
 const inRange=d=>{const n=dayNum(d);return n>=1&&n<=40};
 const upcomingDays=()=>{const t=today();const f=days().filter(d=>d>=t);return f.length?f:days()};
 const mine=()=>{const m=S.people[S.me.id]||{name:"",items:[]};return{...m,phone:S.myContact||""}};
+const normName=n=>String(n||"").trim().toLowerCase().replace(/\s+/g," ");
+// Everything this person signed up for: this device plus any other phone/browser where they used the same name.
+const myAll=()=>{const me=S.me.id,nm=normName(mine().name);const own=(mine().items||[]).map(i=>({...i,uid:me}));
+  if(!nm)return own;return own.concat(Object.entries(S.people).filter(([u,d])=>u!==me&&normName(d.name)===nm).flatMap(([u,d])=>(d.items||[]).map(i=>({...i,uid:u,linked:true}))))};
+const knownNames=()=>{const seen={};for(const[u,d]of Object.entries(S.people)){if(u===S.me.id||!d.name||!(d.items||[]).length)continue;const k=normName(d.name);if(!seen[k])seen[k]=d.name.trim()}return Object.values(seen).sort((a,b)=>a.localeCompare(b))};
+const LS_NAME="f40-my-name";const lsGet=()=>{try{return localStorage.getItem(LS_NAME)||""}catch(_){return""}};const lsSet=v=>{try{v?localStorage.setItem(LS_NAME,v):localStorage.removeItem(LS_NAME)}catch(_){}};
 const allItems=()=>Object.entries(S.people).flatMap(([u,d])=>(d.items||[]).map(i=>({...i,uid:u})));
 const claimsFor=n=>allItems().filter(i=>i.needId===n.id);
 const isOpen=n=>claimsFor(n).length<(+n.spots||1);
@@ -578,9 +585,9 @@ function googleSteps(f){return sheetHead("Almost there 📅","Your calendar file
   <div class="mt"><button class="btn primary block" data-act="close">Got it</button></div>`}
 function familyEvents(){const ev=allItems().map(i=>itemEvent(i,true));
   S.needs.filter(n=>isOpen(n)).forEach(n=>{const c=catInfo(n.cat);ev.push(vevent("need-"+n.id,`${n.priority?"★ ":""}Open: ${n.title||c.label}`,n.date,n.start,+n.dur||60,n.note||"",S.settings.address))});return ev}
-function myEvents(){return(mine().items||[]).filter(i=>i.date>=today()).map(i=>itemEvent({...i,uid:S.me.id}))}
+function myEvents(){return myAll().filter(i=>i.date>=today()).map(i=>itemEvent(i))}
 function syncSheet(){
-  if(!S.syncScope)S.syncScope=(mine().items||[]).length?"mine":"family";
+  if(!S.syncScope)S.syncScope=myAll().length?"mine":"family";
   const sc=S.syncScope,n=sc==="mine"?myEvents().length:familyEvents().length;let last="";
   try{const t=+localStorage.getItem("f40-synced");if(t)last=`Last synced ${new Date(t).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}`}catch(_){}
   const G='<svg viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.2H3.1v2.6A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.4 13.9a6 6 0 0 1 0-3.8V7.5H3.1a10 10 0 0 0 0 9z"/><path fill="#EA4335" d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.8-2.8A10 10 0 0 0 3.1 7.5l3.3 2.6C7.2 7.7 9.4 5.9 12 5.9z"/></svg>';
@@ -639,7 +646,8 @@ function timeSelect(name,sel){let o="";for(let m=6*60;m<=22*60;m+=30){const t=`$
 function durChips(name,sel){return`<div class="durs">${[30,60,90,120,180,240,360].map(m=>`<label><input type="radio" name="${name}" value="${m}" ${m===sel?"checked":""}><span>${fmtDur(m)}</span></label>`).join("")}</div>`}
 function nameFields(){const me=mine();
   if(me.name)return`<div class="signed">Signing up as <b>${esc(me.name)}</b> · <button type="button" class="linkbtn" data-act="tab" data-tab="mine">change</button></div>`;
-  return`<div class="two"><div class="field"><label class="lbl">Your name</label><input name="pname" required placeholder="e.g. Aunt Maria" value="${esc(S.me.name||"")}"></div>
+  const names=knownNames();
+  return`${names.length?`<div class="field"><label class="lbl">Signed up before? Tap your name</label><div class="namechips">${names.map(n=>`<button type="button" class="dish" data-act="fillname" data-name="${esc(n)}">${esc(n)}</button>`).join("")}</div></div>`:""}<div class="two"><div class="field"><label class="lbl">Your name</label><input name="pname" required placeholder="e.g. Aunt Maria" value="${esc(S.me.name||lsGet())}"></div>
   <div class="field"><label class="lbl">Phone <span class="opt">optional</span></label><input name="pphone" type="tel" placeholder="So Elena can text you"></div></div>`}
 function sheetHead(t,sub){return`<div class="sheet-h"><div><h3>${t}</h3>${sub?`<p>${sub}</p>`:""}</div><button class="x" type="button" data-act="close" aria-label="Close">×</button></div>`}
 function guardWrite(){if(!S.me.id){toast("Still connecting — try again in a second.");return false}return true}
@@ -665,7 +673,7 @@ function itemRow(i,opts={}){
   const t=isMeal?`${MEALTYPES[i.mealType]||"Meal"}: ${esc(i.dish||"A homemade meal")}`:esc(i.title||c.label);
   const when=(opts.showDate?`${fmtDate(i.date)} · `:"")+(isMeal?`drop-off ~${fmtTime(i.start||"17:00")}`:fmtRange(i.start,i.dur));
   return`<div class="row c-${c.color}"${opts.flat?' style="border:0;padding:0;background:none"':""}><div class="ico">${c.icon}</div>
-   <div class="rb"><div class="rt">${t}</div><div class="rm">${when} · ${i.uid===S.me.id?`<span class="you">You</span>`:`<span class="who">${esc(nameOf(i.uid))}</span>`}</div>
+   <div class="rb"><div class="rt">${t}</div><div class="rm">${when} · ${i.uid===S.me.id||i.linked?`<span class="you">You</span>`:`<span class="who">${esc(nameOf(i.uid))}</span>`}</div>
    ${i.note?`<div class="rn">${esc(i.note)}</div>`:""}</div>${opts.actions||""}</div>`}
 function mealOpenRow(d,t,opts={}){return`<div class="row c-honey open"><div class="ico">${MEAL.icon}</div>
   <div class="rb"><div class="rt">${MEALTYPES[t]} — open</div><div class="rm">${opts.showDate?fmtDate(d)+" · ":""}Meal train · ${esc(S.settings.meals.dropoff||"")}</div></div>
@@ -801,13 +809,13 @@ function gridShell(cellFn,cls,hint,legend){
   return`<div class="card cal ${cls}"><div class="cal-top"><h3>${m1===m2.split(" ")[0]?m2:m1+" – "+m2}</h3><span class="small muted">${hint}</span></div>
    <div class="cal-dow">${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(x=>`<div>${x}</div>`).join("")}</div><div class="cal-grid">${cells}</div>${legend||""}</div>`}
 function myGrid(){
-  const t=today(),its=(mine().items||[]);
+  const t=today(),its=myAll();
   return gridShell((k,mon)=>{const mi=its.filter(i=>i.date===k).sort((a,b)=>(a.start||"").localeCompare(b.start||""));
     const pills=mi.slice(0,3).map(i=>{const m=i.kind==="meal",c=m?MEAL:(catInfo(i.cat));return`<span class="pill ${c.color}">${c.icon}<span class="pt">${m?"~"+fmtTime(i.start||"17:00"):fmtTime(i.start)}</span></span>`}).join("");
     return`<button class="cc ${k===t?"today":""} ${k<t?"past":""} ${mi.length?"mine":""}" data-act="myday" data-date="${k}"><div class="cd"><b>${parse(k).getDate()}</b><small>D${dayNum(k)}</small></div>${mon}<div class="pills">${pills}</div>${mi.length>3?`<span class="more">+${mi.length-3}</span>`:""}</button>`},
    "mycal","Tap any day",`<div class="cal-legend"><span><i style="background:#fff;box-shadow:inset 0 0 0 2px var(--rose)"></i>Days you're helping</span></div>`)}
 function myDayMenu(d){
-  const mi=(mine().items||[]).filter(i=>i.date===d).map(i=>({...i,uid:S.me.id})).sort((a,b)=>(a.start||"").localeCompare(b.start||""));
+  const mi=myAll().filter(i=>i.date===d).sort((a,b)=>(a.start||"").localeCompare(b.start||""));
   if(!mi.length)return dayMenu(d);
   let h=`<div class="dm-h"><div class="day-n"><small>DAY</small><b>${dayNum(d)}</b></div><div><h3>${fmtDate(d,{weekday:"long",month:"short",day:"numeric"})}</h3><p>You're helping ${mi.length===1?"once":mi.length+" times"}</p></div><button class="x" data-act="closepop" aria-label="Close">×</button></div>`;
   h+=mi.map(i=>{const m=i.kind==="meal",c=m?MEAL:(catInfo(i.cat));
@@ -861,9 +869,11 @@ function mealsView(){
   if(!shown.length)h+=`<div class="empty">No meal days left — the 40 days are complete.</div>`;
   return h+`</div></section>`}
 function mineView(){
-  const me=mine(),t=today();const items=(me.items||[]).map(i=>({...i,uid:S.me.id})).sort((a,b)=>(a.date+(a.start||"")).localeCompare(b.date+(b.start||"")));
+  const me=mine(),t=today();const items=myAll().sort((a,b)=>(a.date+(a.start||"")).localeCompare(b.date+(b.start||"")));
   const up=items.filter(i=>i.date>=t),past=items.filter(i=>i.date<t);
-  let h=`<section><div class="sec-h"><h2>My shifts</h2>${up.length?`<button class="linkbtn" data-act="copyall">Copy all</button>`:""}</div>
+  let h="";const names=knownNames();
+  if(!normName(me.name)&&names.length)h+=`<section><div class="card" style="background:linear-gradient(160deg,#fff,#FFF5F0)"><b>Signed up before?</b><p class="small muted" style="margin:4px 0 10px">If you signed up on another phone, or in Safari instead of the Home Screen icon, tap your name to bring your shifts back.</p><div class="namechips">${names.map(n=>`<button class="dish" data-act="iam" data-name="${esc(n)}">${esc(n)}</button>`).join("")}</div></div></section>`;
+  h+=`<section><div class="sec-h"><h2>My shifts</h2>${up.length?`<button class="linkbtn" data-act="copyall">Copy all</button>`:""}</div>
   ${up.length&&true?`<div class="card" style="padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:180px"><b>Put all my shifts on my calendar</b><div class="small muted">One file for Apple Calendar (Mac or iPhone)</div></div><button class="btn primary sm" data-act="icsmine">${ICON_A} Add all to Apple Calendar</button></div>`:""}<div class="stack">`;
   if(!up.length)h+=`<div class="empty">You haven't signed up for anything yet. <button class="linkbtn" data-act="help">Offer help</button> or <button class="linkbtn" data-act="meal">bring a meal</button>.</div>`;
   for(const i of up)h+=`<div class="card" style="padding:14px">${itemRow(i,{showDate:true,flat:true,actions:`<div class="ra"><button class="btn ghost sm" data-act="cancel" data-id="${esc(i.id)}">Cancel</button></div>`})}<div class="mt">${calLinks(i)}</div></div>`;
@@ -876,7 +886,7 @@ function mineView(){
    <div class="field"><label class="lbl">Phone <span class="opt">optional</span></label><input name="pphone" type="tel" value="${esc(me.phone||"")}" placeholder="So Elena can text you"></div></div>
    <div><button class="btn ghost" type="submit">Save</button></div></form></div></section>`;
   return h}
-const APP_VER="Nov 22 · v4";
+const APP_VER="Nov 22 · v5";
 function accountCard(){return accountCard0()+`<p class="small muted" style="text-align:center;margin:6px 0 0">App version ${APP_VER}${S.authUser?(S.authUser.isAnonymous?" · guest":" · "+esc((S.authUser.email||((S.authUser.providerData||[]).find(x=>x&&x.email)||{}).email||"no email")))+(S.isAdmin?" · manager":""):" · not connected"}</p>`}
 function accountCard0(){const u=S.authUser;
   if(u&&!u.isAnonymous)return`<section><div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Signed in</b><div class="small muted">${esc(u.email||"")}${S.isAdmin?" · can manage Elena's tab":""}</div></div><button class="btn ghost sm" data-act="signout">Sign out</button></div></section>`;
@@ -1032,6 +1042,8 @@ function showCopy(txt){openSheet(sheetHead("Copy this","Select the text and copy
 document.addEventListener("click",async e=>{
   const a=e.target.closest("[data-act]");if(!e.target.closest("#pop")&&!(a&&(a.dataset.act==="selday"||a.dataset.act==="mealday"||a.dataset.act==="myday"||a.dataset.act==="anotherday")))closePop();if(!a)return;const act=a.dataset.act;if(a.closest("#pop")&&act!=="closepop")closePop();
   if(act==="close"){closeSheet();return}
+  if(act==="fillname"){const f=a.closest("form");if(f&&f.pname){f.pname.value=a.dataset.name;f.pname.classList.remove("err")}return}
+  if(act==="iam"){if(!guardWrite())return;const n=a.dataset.name;try{await saveMine(d=>{d.name=n;return d});lsSet(n);toast(`Welcome back, ${n} 💛`)}catch(_){}return}
   if(act==="google"){try{await FB.auth.google();await onUser(FB.auth.current());closeSheet();toast("Signed in")}catch(e){if(e&&e.code!=="auth/popup-closed-by-user")toast("Google sign-in didn't finish. On the Home Screen app, use Sign in with email link instead.")}return}
   if(act==="emaillink"){openSheet(sheetHead("Sign in with email","We'll email you a sign-in link — no password.")+`<form novalidate data-form="sendlink" class="form"><div class="field"><label class="lbl">Your email</label><input name="email" type="email" required placeholder="you@example.com" autocomplete="email"></div><button class="btn primary block" type="submit">Email me a link</button></form>`);return}
   if(act==="pastelink"){openSheet(sheetHead("Paste your sign-in link","Press and hold the link in the email, tap Copy Link, then paste it here.")+`<form novalidate data-form="pastelink" class="form"><div class="field"><input name="link" type="url" required placeholder="https://…"></div><button class="btn primary block" type="submit">Sign in</button></form>`);return}
@@ -1056,15 +1068,16 @@ document.addEventListener("click",async e=>{
   if(act==="pastmeals"){S.showPastMeals=!S.showPastMeals;render();return}
   if(act==="goday"){S.tab="schedule";S.filter="all";S.sel=a.dataset.date;if(a.dataset.date<today())S.showPast=true;render();const el=document.getElementById("d-"+a.dataset.date);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});return}
   if(act==="icsone"){const p=S.people[a.dataset.uid]||mine();const i=(p.items||[]).find(x=>x.id===a.dataset.id);if(i)saveIcs("first-40-days-"+i.date,"The First 40 Days",[itemEvent({...i,uid:a.dataset.uid})]);return}
-  if(act==="icsmine"){const its=(mine().items||[]).filter(i=>i.date>=today()).map(i=>({...i,uid:S.me.id}));saveIcs("my-first-40-days","The First 40 Days — my shifts",its.map(i=>itemEvent(i)));return}
+  if(act==="icsmine"){const its=myAll().filter(i=>i.date>=today());saveIcs("my-first-40-days","The First 40 Days — my shifts",its.map(i=>itemEvent(i)));return}
   if(act==="icsfamily"){saveIcs("first-40-days-family","The First 40 Days",familyEvents());return}
   if(act==="sync"){closePop();syncSheet();return}
   if(act==="copyfeed"){copyText(FEED,"Calendar link copied — paste it into your calendar app");return}
   if(act==="syncscope"){S.syncScope=a.dataset.v;syncSheet();return}
   if(act==="syncgo"){const fam=S.syncScope==="family";saveIcs(fam?"first-40-days-family":"my-first-40-days",fam?"The First 40 Days":"The First 40 Days — my shifts",fam?familyEvents():myEvents(),a.dataset.t);return}
   if(act==="copyev"){const p=S.people[a.dataset.uid]||mine();const i=(p.items||[]).find(x=>x.id===a.dataset.id);if(i)copyText(evText(i),"Event details copied");return}
-  if(act==="copyall"){const its=(mine().items||[]).filter(i=>i.date>=today()).sort((x,y)=>(x.date+(x.start||"")).localeCompare(y.date+(y.start||"")));copyText(its.map(evText).join("\n\n"),"Your schedule is copied");return}
-  if(act==="cancel"){const i=(mine().items||[]).find(x=>x.id===a.dataset.id);if(!i)return;
+  if(act==="copyall"){const its=myAll().filter(i=>i.date>=today()).sort((x,y)=>(x.date+(x.start||"")).localeCompare(y.date+(y.start||"")));copyText(its.map(evText).join("\n\n"),"Your schedule is copied");return}
+  if(act==="cancel"){const i=myAll().find(x=>x.id===a.dataset.id);if(!i)return;
+    if(i.linked){openSheet(sheetHead("Signed up somewhere else",`${esc(evInfo(i).title)} · ${fmtDate(i.date)}`)+`<p class="muted">You signed up for this from another phone or browser (or from Safari instead of the Home Screen icon), so it can only be cancelled there. Or just text Elena or Patrick and they'll take it off for you.</p><button class="btn ghost block" data-act="close">OK</button>`);return}
     openSheet(sheetHead("Cancel this?",`${esc(evInfo(i).title)} · ${fmtDate(i.date)}`)+`<p class="muted">It'll open back up so someone else can take it. Maybe send Elena a quick text too.</p><div class="calrow"><button class="btn primary" data-act="docancel" data-id="${esc(i.id)}">Yes, cancel it</button><button class="btn ghost" data-act="close">Keep it</button></div>`);return}
   if(act==="docancel"){const id=a.dataset.id;try{await saveMine(d=>{d.items=d.items.filter(x=>x.id!==id);return d});closeSheet();toast("Cancelled — thanks for letting us know")}catch(_){}return}
   if(act==="pri"){const n=S.needs.find(x=>x.id===a.dataset.id);if(n)try{await store.setNeed({...n,priority:!n.priority});toast(n.priority?"Priority removed":"Marked as priority ★")}catch(_){}return}
@@ -1075,7 +1088,7 @@ document.addEventListener("click",async e=>{
     openSheet(sheetHead("Remove this sign-up?",esc(nameOf(u)))+`<div class="calrow"><button class="btn primary" data-act="dormitem" data-id="${esc(id)}" data-uid="${esc(u)}">Remove</button><button class="btn ghost" data-act="close">Keep</button></div>`);return}
   if(act==="dormitem"){const u=a.dataset.uid,id=a.dataset.id;const p=clone(S.people[u]);p.items=(p.items||[]).filter(x=>x.id!==id);try{await store.setPerson(u,p);closeSheet();toast("Removed")}catch(_){}return}
 });
-function applyName(d,fd){if(fd.has("pname")){d.name=String(fd.get("pname")).trim().slice(0,60);d.phone=String(fd.get("pphone")||"").trim().slice(0,30)}return d}
+function applyName(d,fd){if(fd.has("pname")){d.name=String(fd.get("pname")).trim().slice(0,60);lsSet(d.name);d.phone=String(fd.get("pphone")||"").trim().slice(0,30)}return d}
 document.addEventListener("submit",async e=>{
   e.preventDefault();const f=e.target,kind=f.dataset.form;
   if(!kind||kind==="confirmemail")return;
