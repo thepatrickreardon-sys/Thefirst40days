@@ -14,6 +14,7 @@ TOKEN = "aR5SXx0iAMyxzaGMWc4VX44y"
 ROOT = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(ROOT, "feed", TOKEN + ".ics")
 JSON_OUT = os.path.join(ROOT, "schedule.json")
+ME_DIR = os.path.join(ROOT, "feed", "me")
 
 CATS = {
     "talulah": "Time with Talulah", "tallulah": "Time with Talulah", "baby": "Hold the baby",
@@ -163,7 +164,72 @@ def main(path):
         with open(JSON_OUT, "w", encoding="utf-8") as f:
             json.dump(page, f, ensure_ascii=False, indent=1)
         changed = True
+    changed = build_personal(people, mod) or changed
     print(("updated" if changed else "unchanged") + f" ({len(events)} events)")
+
+
+def norm(n):
+    return " ".join((n or "").strip().lower().split())
+
+
+def me_key(name):
+    # Same formula as the app (myFeedKey) so each person's link matches their file.
+    return hashlib.sha256(("f40|" + norm(name)).encode("utf-8")).hexdigest()[:16]
+
+
+def strip_ts(t):
+    return "\n".join(l for l in t.splitlines() if not l.startswith(("DTSTAMP", "LAST-MODIFIED")))
+
+
+def write_if_changed(path, body):
+    if os.path.exists(path) and strip_ts(open(path, encoding="utf-8", newline="").read()) == strip_ts(body):
+        return False
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        f.write(body)
+    return True
+
+
+def build_personal(people, mod):
+    """One auto-updating calendar per helper (grouped by name, so every phone they used counts).
+    Files are never deleted: someone who cancels everything gets an empty calendar instead of a broken link."""
+    os.makedirs(ME_DIR, exist_ok=True)
+    groups = {}
+    for p in people:
+        d = p.get("data") or {}
+        if not norm(d.get("name")):
+            continue
+        g = groups.setdefault(me_key(d["name"]), {"name": d["name"].strip(), "items": []})
+        g["items"] += d.get("items") or []
+    for f in os.listdir(ME_DIR):
+        if f.endswith(".ics") and f[:-4] not in groups:
+            groups[f[:-4]] = {"name": "", "items": []}
+    changed = False
+    for key, g in groups.items():
+        evs = []
+        for i in g["items"]:
+            if i.get("kind") == "meal":
+                meal = MEALS.get(i.get("mealType"), "Meal")
+                title = f"🥘 Bring {meal.lower()} to Elena & family"
+                desc = [f"Bringing: {i['dish']}" if i.get("dish") else "", "Drop-off details and allergies are in The First 40 Days app."]
+                dur = 30
+            else:
+                label = i.get("title") or CATS.get(i.get("cat"), "Helping out")
+                title = f"{label} — for Elena"
+                desc = [CATS.get(i.get("cat"), ""), f"Bringing: {i['dish']}" if i.get("dish") else ""]
+                dur = i.get("dur") or 60
+            if i.get("note"):
+                desc.append(f"Your note: {i['note']}")
+            desc.append("From The First 40 Days")
+            evs.append(event("me-" + i["id"], title, i["date"], i.get("start") or "17:00", dur, "\n".join(x for x in desc if x), mod))
+        first = g["name"].split()[0] if g["name"] else ""
+        cal = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//The First 40 Days//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+               "X-WR-CALNAME:" + esc("First 40 Days" + (f" — {first}" if first else "")), "X-WR-TIMEZONE:America/New_York",
+               "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H", *VTZ]
+        for e in sorted(evs, key=lambda x: x[5]):
+            cal += e
+        cal.append("END:VCALENDAR")
+        changed = write_if_changed(os.path.join(ME_DIR, key + ".ics"), "\r\n".join(fold(l) for l in cal) + "\r\n") or changed
+    return changed
 
 
 if __name__ == "__main__":

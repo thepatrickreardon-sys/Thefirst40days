@@ -382,6 +382,7 @@ section{margin-top:26px}
 .idea-chips{margin-top:8px}.idea-chips .dish{border:0;cursor:pointer;font:inherit;font-size:13px}
 .namechips{display:flex;flex-wrap:wrap}.namechips .dish{border:0;cursor:pointer;font:inherit;font-size:14px}
 .other-ways{margin-top:14px}.other-ways summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--rose-d)}
+.subcard{padding:14px 16px;background:linear-gradient(160deg,#fff,#F3F7F1);border-color:#D8E5D6}.subcard.ok{background:var(--sage-s)}.calbtn.sub{font-weight:700}
 </style>
 </head>
 <body>
@@ -604,13 +605,11 @@ function syncSheet(){
   const G='<svg viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.2H3.1v2.6A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.4 13.9a6 6 0 0 1 0-3.8V7.5H3.1a10 10 0 0 0 0 9z"/><path fill="#EA4335" d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.8-2.8A10 10 0 0 0 3.1 7.5l3.3 2.6C7.2 7.7 9.4 5.9 12 5.9z"/></svg>';
   openSheet(sheetHead("Sync to your calendar","Put the schedule on the calendar you already use.")+
    `<div class="card" style="padding:16px;margin-bottom:18px;background:linear-gradient(160deg,#fff,#F3F7F1);border-color:#D8E5D6">
-     <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="font-size:22px">🔄</span><b style="font-size:17px">Subscribe — updates automatically</b></div>
+     <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="font-size:22px">🔄</span><b style="font-size:17px">Whole family schedule — updates itself</b></div>
      <p class="small muted" style="margin:0 0 12px">Add the whole family schedule once and it keeps itself up to date: new sign-ups and cancellations show up on their own within a couple of hours.</p>
-     <div class="calrow"><button class="btn primary sm" data-act="copyfeed">Copy calendar link</button></div>
-     <ul class="tips small" style="margin-top:10px">
-      <li><span>📱</span><div><b>iPhone:</b> Settings → Calendar → Accounts → Add Account → Other → <b>Add Subscribed Calendar</b>, paste the link.</div></li>
-      <li><span>💻</span><div><b>Mac:</b> Calendar → File → <b>New Calendar Subscription</b>, paste the link. Set Auto-refresh to every hour.</div></li>
-      <li><span>🗓️</span><div><b>Google Calendar:</b> on a computer, Other calendars ＋ → <b>From URL</b>, paste the link. Google refreshes every few hours.</div></li></ul></div>
+     ${subButtons(FAMILY_ICS,"The First 40 Days")}
+     <p class="small muted" style="margin:10px 0 0">Tap one, then tap <b>Subscribe</b>. <button class="linkbtn" data-act="copyfeed">Copy the link instead</button></p></div>
+   ${myCalCard()?`<div class="dm-sub" style="margin-top:0">Just your own shifts</div><div style="margin-bottom:18px">${myCalCard()}</div>`:""}
    <div class="dm-sub" style="margin-top:0">Or download a one-time copy${last?` · ${last}`:""}</div>`+
    `<div class="seg full"><button class="${sc==="mine"?"on":""}" data-act="syncscope" data-v="mine">My shifts</button><button class="${sc==="family"?"on":""}" data-act="syncscope" data-v="family">Whole family schedule</button></div>
    <p class="small muted" style="margin:-4px 2px 14px">${sc==="mine"?`${n} upcoming shift${n===1?"":"s"} of yours.`:`${n} event${n===1?"":"s"}: every helper, meal and open request.`}</p>
@@ -624,9 +623,27 @@ async function saveIcs(fileBase,calName,events,target){
   const blob=new Blob([icsDoc(calName,events)],{type:"text/calendar;charset=utf-8"});const url=URL.createObjectURL(blob);
   const a=document.createElement("a");a.href=url;a.download=fileBase+".ics";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);
   try{localStorage.setItem("f40-synced",String(Date.now()))}catch(_){}
+  if(target==="quiet"){toast("Opening it in your calendar…");return}
   openSheet(target==="google"?googleSteps(fileBase):appleSteps(fileBase));
 }
 
+/* ---------- auto-updating calendars ---------- */
+const SITE=/github\.io$/.test(location.hostname)?location.origin+location.pathname.replace(/[^/]*$/,""):"https://thepatrickreardon-sys.github.io/Thefirst40days/";
+const FAMILY_ICS=SITE+"feed/"+FEED.split("/").pop();
+async function feedKey(name){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("f40|"+normName(name)));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,16)}
+S.feed={name:"",url:"",ready:false};
+async function checkFeed(){const nm=normName(mine().name);if(!nm){S.feed={name:"",url:"",ready:false};return}if(S.feed.name===nm&&(S.feed.ready||S.feed.checking||Date.now()-(S.feed.at||0)<60000))return;
+  S.feed={name:nm,url:"",ready:false,checking:true};try{const url=SITE+"feed/me/"+(await feedKey(nm))+".ics";const r=await fetch(url,{method:"HEAD",cache:"no-store"});S.feed={name:nm,url,ready:r.ok,at:Date.now()}}catch(_){S.feed={name:nm,url:"",ready:false,at:Date.now()}}render()}
+const webcal=u=>u.replace(/^https?:/,"webcal:");
+const gSub=u=>"https://calendar.google.com/calendar/render?cid="+encodeURIComponent(webcal(u));
+const oSub=(u,n)=>"https://outlook.live.com/calendar/0/addfromweb?url="+encodeURIComponent(u)+"&name="+encodeURIComponent(n);
+const subscribed=()=>{try{return localStorage.getItem("f40-sub")==="1"}catch(_){return false}};
+function subButtons(url,name){return`<div class="calrow"><a class="calbtn sub" href="${esc(webcal(url))}" data-act="subbed">${ICON_A}iPhone / Mac</a><a class="calbtn sub" href="${esc(gSub(url))}" target="_blank" rel="noopener" data-act="subbed">${ICON_G}Google</a><a class="calbtn sub" href="${esc(oSub(url,name))}" target="_blank" rel="noopener" data-act="subbed">${ICON_G}Outlook</a></div>`}
+function myCalCard(compact){
+  if(!normName(mine().name))return"";
+  if(!S.feed.ready)return S.feed.checking?"":`<div class="card subcard"><b>📅 Your own auto-updating calendar</b><div class="small muted" style="margin-top:4px">It's being set up and is usually ready within 30 minutes of your first sign-up. Check back here, or add this shift with the buttons ${compact?"above":"on each shift"} for now.</div></div>`;
+  if(subscribed())return`<div class="card subcard ok"><b>✓ Your calendar is connected</b><div class="small muted" style="margin-top:4px">New sign-ups and cancellations show up on their own, usually within an hour. <button class="linkbtn" data-act="resub">Connect another calendar</button></div></div>`;
+  return`<div class="card subcard"><b>📅 Put all my shifts on my calendar</b><div class="small muted" style="margin:4px 0 12px">One tap, then tap <b>Subscribe</b>. Every shift you sign up for, now and later, shows up on its own.</div>${subButtons(S.feed.url,"First 40 Days")}</div>`}
 /* ---------- UI bits ---------- */
 function toast(m,ms=2600){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),ms)}
 function openSheet(html){$("#sheet").innerHTML=html;$("#sheetWrap").classList.add("show");document.body.style.overflow="hidden";$("#sheet").scrollTop=0}
@@ -885,7 +902,7 @@ function mineView(){
   let h="";const names=knownNames();
   if(!normName(me.name)&&names.length)h+=`<section><div class="card" style="background:linear-gradient(160deg,#fff,#FFF5F0)"><b>Signed up before?</b><p class="small muted" style="margin:4px 0 10px">If you signed up on another phone, or in Safari instead of the Home Screen icon, tap your name to bring your shifts back.</p><div class="namechips">${names.map(n=>`<button class="dish" data-act="iam" data-name="${esc(n)}">${esc(n)}</button>`).join("")}</div></div></section>`;
   h+=`<section><div class="sec-h"><h2>My shifts</h2>${up.length?`<button class="linkbtn" data-act="copyall">Copy all</button>`:""}</div>
-  ${up.length&&true?`<div class="card" style="padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:180px"><b>Put all my shifts on my calendar</b><div class="small muted">One file for Apple Calendar (Mac or iPhone)</div></div><button class="btn primary sm" data-act="icsmine">${ICON_A} Add all to Apple Calendar</button></div>`:""}<div class="stack">`;
+  ${up.length?`<div style="margin-bottom:10px">${myCalCard()}</div>`:""}<div class="stack">`;
   if(!up.length)h+=`<div class="empty">You haven't signed up for anything yet. <button class="linkbtn" data-act="help">Offer help</button> or <button class="linkbtn" data-act="meal">bring a meal</button>.</div>`;
   for(const i of up)h+=`<div class="card" style="padding:14px">${itemRow(i,{showDate:true,flat:true,actions:`<div class="ra"><button class="btn ghost sm" data-act="cancel" data-id="${esc(i.id)}">Cancel</button></div>`})}<div class="mt">${calLinks(i)}</div></div>`;
   h+=`</div></section>`;
@@ -897,7 +914,7 @@ function mineView(){
    <div class="field"><label class="lbl">Phone <span class="opt">optional</span></label><input name="pphone" type="tel" value="${esc(me.phone||"")}" placeholder="So Elena can text you"></div></div>
    <div><button class="btn ghost" type="submit">Save</button></div></form></div></section>`;
   return h}
-const APP_VER="Nov 22 · v6";
+const APP_VER="Nov 22 · v7";
 function accountCard(){return accountCard0()+`<p class="small muted" style="text-align:center;margin:6px 0 0">App version ${APP_VER}${S.authUser?(S.authUser.isAnonymous?" · guest":" · "+esc((S.authUser.email||((S.authUser.providerData||[]).find(x=>x&&x.email)||{}).email||"no email")))+(S.isAdmin?" · manager":""):" · not connected"}</p>`}
 function accountCard0(){const u=S.authUser;
   if(u&&!u.isAnonymous)return`<section><div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Signed in</b><div class="small muted">${esc(u.email||"")}${S.isAdmin?" · can manage Elena's tab":""}</div></div><button class="btn ghost sm" data-act="signout">Sign out</button>${!u.emailVerified&&S.isAdmin?`<div class="banner warn" style="margin:12px 0 0"><span>✉️</span><div>Confirm your email to manage Elena's tab. <button class="linkbtn" data-act="verify">Send the email</button> · <button class="linkbtn" data-act="reloaduser">I've confirmed it</button></div></div>`:""}<details class="other-ways" style="width:100%"><summary>Set or change your password</summary><form novalidate data-form="setpw" class="form" style="margin-top:10px"><div class="field"><input name="pw" type="password" required minlength="6" autocomplete="new-password" placeholder="New password (6+ characters)"></div><button class="btn ghost sm" type="submit">Save password</button></form></details></div></section>`;
@@ -1005,6 +1022,7 @@ function render(){
   renderTabs();renderBanners();
   $("#familyLine").textContent=S.settings.family||"A circle of care for Elena & family";
   if(S.live&&!(S.loaded.s&&S.loaded.n&&S.loaded.p)&&!S.stale){$("#main").innerHTML=`<div class="loading"><div class="spin"></div>Gathering the schedule…</div>`;return}
+  if(S.live&&S.loaded.p)checkFeed();
   const v={home:homeView,prep:prepView,schedule:scheduleView,meals:mealsView,mine:mineView,elena:elenaView}[S.tab]||homeView;
   $("#main").innerHTML=v();
 }
@@ -1049,6 +1067,7 @@ function successSheet(item,msg){
   openSheet(`<div class="success"><div class="big">💛</div><h3 style="font-size:24px;margin-top:6px">${msg||"You're on the schedule!"}</h3>
    <p class="muted">${fmtDate(item.date,{weekday:"long",month:"long",day:"numeric"})} · ${item.kind==="meal"?"drop-off ~"+fmtTime(item.start):fmtRange(item.start,item.dur)}</p>
    <p class="small muted" style="margin:16px 0 8px">Add it to your calendar</p>${calLinks({...item,uid:S.me.id},true)}
+   ${S.feed.ready&&!subscribed()?`<div style="margin-top:16px;text-align:left">${myCalCard(true)}</div>`:""}
    ${S.authUser&&S.authUser.isAnonymous?`<p class="small muted" style="margin:18px 0 6px">Want your sign-ups on your other phone or in the Home Screen app?</p><button class="btn soft sm" data-act="acctsheet">Save them with your email</button>`:""}
    <div style="margin-top:20px"><button class="btn ghost" data-act="close">Done</button></div></div>`)}
 function copyText(txt,label){
@@ -1061,6 +1080,8 @@ function showCopy(txt){openSheet(sheetHead("Copy this","Select the text and copy
 document.addEventListener("click",async e=>{
   const a=e.target.closest("[data-act]");if(!e.target.closest("#pop")&&!(a&&(a.dataset.act==="selday"||a.dataset.act==="mealday"||a.dataset.act==="myday"||a.dataset.act==="anotherday")))closePop();if(!a)return;const act=a.dataset.act;if(a.closest("#pop")&&act!=="closepop")closePop();
   if(act==="close"){closeSheet();return}
+  if(act==="subbed"){try{localStorage.setItem("f40-sub","1")}catch(_){}setTimeout(render,1500);return}
+  if(act==="resub"){try{localStorage.removeItem("f40-sub")}catch(_){}render();return}
   if(act==="acctsheet"){accountSheet();return}
   if(act==="forgotpw"){const f=a.closest("form");const em=f&&f.email?String(f.email.value).trim():"";if(!em){toast("Type your email first, then tap Forgot password");f&&f.email&&f.email.focus();return}
     try{await FB.auth.reset(em);toast("Check your email for a link to set a new password 📬",4500)}catch(e){toast(authMsg(e),4500)}return}
@@ -1091,11 +1112,11 @@ document.addEventListener("click",async e=>{
   if(act==="past"){S.showPast=!S.showPast;render();return}
   if(act==="pastmeals"){S.showPastMeals=!S.showPastMeals;render();return}
   if(act==="goday"){S.tab="schedule";S.filter="all";S.sel=a.dataset.date;if(a.dataset.date<today())S.showPast=true;render();const el=document.getElementById("d-"+a.dataset.date);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});return}
-  if(act==="icsone"){const p=S.people[a.dataset.uid]||mine();const i=(p.items||[]).find(x=>x.id===a.dataset.id);if(i)saveIcs("first-40-days-"+i.date,"The First 40 Days",[itemEvent({...i,uid:a.dataset.uid})]);return}
+  if(act==="icsone"){const p=S.people[a.dataset.uid]||mine();const i=(p.items||[]).find(x=>x.id===a.dataset.id);if(i)saveIcs("first-40-days-"+i.date,"The First 40 Days",[itemEvent({...i,uid:a.dataset.uid})],"quiet");return}
   if(act==="icsmine"){const its=myAll().filter(i=>i.date>=today());saveIcs("my-first-40-days","The First 40 Days — my shifts",its.map(i=>itemEvent(i)));return}
   if(act==="icsfamily"){saveIcs("first-40-days-family","The First 40 Days",familyEvents());return}
   if(act==="sync"){closePop();syncSheet();return}
-  if(act==="copyfeed"){copyText(FEED,"Calendar link copied — paste it into your calendar app");return}
+  if(act==="copyfeed"){copyText(FAMILY_ICS,"Calendar link copied — paste it into your calendar app");return}
   if(act==="syncscope"){S.syncScope=a.dataset.v;syncSheet();return}
   if(act==="syncgo"){const fam=S.syncScope==="family";saveIcs(fam?"first-40-days-family":"my-first-40-days",fam?"The First 40 Days":"The First 40 Days — my shifts",fam?familyEvents():myEvents(),a.dataset.t);return}
   if(act==="copyev"){const p=S.people[a.dataset.uid]||mine();const i=(p.items||[]).find(x=>x.id===a.dataset.id);if(i)copyText(evText(i),"Event details copied");return}
