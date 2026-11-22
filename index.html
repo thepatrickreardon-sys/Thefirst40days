@@ -20,7 +20,7 @@
 // Firebase adapter: exposes window.FB with a tiny db/auth API the app uses.
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {getFirestore,doc,collection,setDoc,updateDoc,deleteDoc,onSnapshot,getDoc} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import {getAuth,onIdTokenChanged,onAuthStateChanged,signInAnonymously,GoogleAuthProvider,signInWithPopup,linkWithPopup,signOut,sendSignInLinkToEmail,isSignInWithEmailLink,signInWithEmailLink,EmailAuthProvider,linkWithCredential} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {getAuth,onIdTokenChanged,onAuthStateChanged,signInAnonymously,GoogleAuthProvider,signInWithPopup,linkWithPopup,signOut,sendSignInLinkToEmail,isSignInWithEmailLink,signInWithEmailLink,EmailAuthProvider,linkWithCredential,signInWithEmailAndPassword,createUserWithEmailAndPassword,updatePassword,sendPasswordResetEmail,sendEmailVerification} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 const app=initializeApp({apiKey:"AIzaSyCJwd0Kl_XaSE4T3k-3JjlsBXC-brNdFCY",authDomain:"thefirst40days-2656f.firebaseapp.com",projectId:"thefirst40days-2656f",storageBucket:"thefirst40days-2656f.firebasestorage.app",messagingSenderId:"361920828748",appId:"1:361920828748:web:4668b0834500a2cabaabe9"});
 const fs=getFirestore(app),auth=getAuth(app);
 const wrapDoc=d=>({id:d.id,exists:d.exists(),data:()=>d.data(),metadata:d.metadata});
@@ -45,6 +45,16 @@ const authApi={
     if(u&&u.isAnonymous){try{await linkWithCredential(u,EmailAuthProvider.credentialWithLink(email,href))}catch(e){if(e.code==="auth/credential-already-in-use"||e.code==="auth/email-already-in-use")await signInWithEmailLink(auth,email,href);else throw e}}
     else await signInWithEmailLink(auth,email,href);
     try{localStorage.removeItem(EMAIL_KEY)}catch(_){}return true},
+  async password(email,pw){
+    try{await signInWithEmailAndPassword(auth,email,pw);return{created:false}}
+    catch(e){if(!["auth/invalid-credential","auth/user-not-found","auth/wrong-password","auth/invalid-login-credentials"].includes(e.code))throw e}
+    const u=auth.currentUser;
+    try{if(u&&u.isAnonymous)await linkWithCredential(u,EmailAuthProvider.credential(email,pw));else await createUserWithEmailAndPassword(auth,email,pw);return{created:true}}
+    catch(e){if(e.code==="auth/email-already-in-use"||e.code==="auth/credential-already-in-use"){const x=new Error("wrong password");x.code="f40/wrong-password";throw x}throw e}},
+  setPassword:pw=>updatePassword(auth.currentUser,pw),
+  reset:email=>sendPasswordResetEmail(auth,email),
+  verify:()=>sendEmailVerification(auth.currentUser,{url:location.origin+location.pathname}),
+  async reload(){const u=auth.currentUser;if(u){await u.reload();await u.getIdToken(true)}return auth.currentUser},
   signOut:()=>signOut(auth)
 };
 window.FB={db,auth:authApi};window.dispatchEvent(new Event("fb-ready"));
@@ -371,6 +381,7 @@ section{margin-top:26px}
 .pp:has(input:checked) span{border-color:var(--rose);background:#FFF6F2;box-shadow:0 0 0 3px var(--rose-s)}
 .idea-chips{margin-top:8px}.idea-chips .dish{border:0;cursor:pointer;font:inherit;font-size:13px}
 .namechips{display:flex;flex-wrap:wrap}.namechips .dish{border:0;cursor:pointer;font:inherit;font-size:14px}
+.other-ways{margin-top:14px}.other-ways summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--rose-d)}
 </style>
 </head>
 <body>
@@ -886,15 +897,22 @@ function mineView(){
    <div class="field"><label class="lbl">Phone <span class="opt">optional</span></label><input name="pphone" type="tel" value="${esc(me.phone||"")}" placeholder="So Elena can text you"></div></div>
    <div><button class="btn ghost" type="submit">Save</button></div></form></div></section>`;
   return h}
-const APP_VER="Nov 22 · v5";
+const APP_VER="Nov 22 · v6";
 function accountCard(){return accountCard0()+`<p class="small muted" style="text-align:center;margin:6px 0 0">App version ${APP_VER}${S.authUser?(S.authUser.isAnonymous?" · guest":" · "+esc((S.authUser.email||((S.authUser.providerData||[]).find(x=>x&&x.email)||{}).email||"no email")))+(S.isAdmin?" · manager":""):" · not connected"}</p>`}
 function accountCard0(){const u=S.authUser;
-  if(u&&!u.isAnonymous)return`<section><div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Signed in</b><div class="small muted">${esc(u.email||"")}${S.isAdmin?" · can manage Elena's tab":""}</div></div><button class="btn ghost sm" data-act="signout">Sign out</button></div></section>`;
-  return`<section><div class="card"><div class="admin-h"><h3>Your account</h3></div>
-   <p class="small muted" style="margin:-6px 0 12px">You're signed up as a guest on this device, so no account is needed. Sign in only if you want your shifts on more than one device, or if you're Elena or Patrick.</p>
-   <div class="calrow"><button class="btn ghost sm" data-act="google">Sign in with Google</button><button class="btn ghost sm" data-act="emaillink">Sign in with email link</button></div>
-   <p class="small muted" style="margin:12px 0 0">Using the app from your Home Screen icon on iPhone? Use <b>Sign in with email link</b>, then come back here and tap <b>Paste link</b>.</p>
-   <div class="calrow" style="margin-top:8px"><button class="btn ghost sm" data-act="pastelink">Paste link</button></div></div></section>`}
+  if(u&&!u.isAnonymous)return`<section><div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Signed in</b><div class="small muted">${esc(u.email||"")}${S.isAdmin?" · can manage Elena's tab":""}</div></div><button class="btn ghost sm" data-act="signout">Sign out</button>${!u.emailVerified&&S.isAdmin?`<div class="banner warn" style="margin:12px 0 0"><span>✉️</span><div>Confirm your email to manage Elena's tab. <button class="linkbtn" data-act="verify">Send the email</button> · <button class="linkbtn" data-act="reloaduser">I've confirmed it</button></div></div>`:""}<details class="other-ways" style="width:100%"><summary>Set or change your password</summary><form novalidate data-form="setpw" class="form" style="margin-top:10px"><div class="field"><input name="pw" type="password" required minlength="6" autocomplete="new-password" placeholder="New password (6+ characters)"></div><button class="btn ghost sm" type="submit">Save password</button></form></details></div></section>`;
+  return`<section><div class="card"><div class="admin-h"><h3>Sign in or create an account</h3></div>
+   <p class="small muted" style="margin:-6px 0 12px">Optional. Your email and a password keep your sign-ups with you on any phone, in Safari or the Home Screen app. New here? Just pick a password and we'll make your account.</p>
+   ${pwForm()}
+   <details class="other-ways"><summary>Other ways to sign in</summary>
+   <div class="calrow" style="margin-top:10px"><button class="btn ghost sm" data-act="google">Google</button><button class="btn ghost sm" data-act="emaillink">Email me a link</button><button class="btn ghost sm" data-act="pastelink">Paste link</button></div></details></div></section>`}
+function pwForm(){return`<form novalidate data-form="pw" class="form">
+   <div class="field"><label class="lbl">Email</label><input name="email" type="email" required autocomplete="username" placeholder="you@example.com" value="${esc(lsGet2("f40-email"))}"></div>
+   <div class="field"><label class="lbl">Password <span class="opt">6 or more characters</span></label><input name="pw" type="password" required minlength="6" autocomplete="current-password"></div>
+   <button class="btn primary block" type="submit">Continue</button>
+   <div style="text-align:center"><button type="button" class="linkbtn small" data-act="forgotpw">Forgot password?</button></div></form>`}
+function accountSheet(){openSheet(sheetHead("Keep your sign-ups everywhere","Use your email and a password. New here? Just pick one.")+pwForm())}
+const lsGet2=k=>{try{return localStorage.getItem(k)||""}catch(_){return""}};
 function elenaView(){
   if(!S.isAdmin)return`<div class="empty">This page is just for Elena.</div>`;
   const st=S.settings,m=st.meals,t=today();
@@ -1031,6 +1049,7 @@ function successSheet(item,msg){
   openSheet(`<div class="success"><div class="big">💛</div><h3 style="font-size:24px;margin-top:6px">${msg||"You're on the schedule!"}</h3>
    <p class="muted">${fmtDate(item.date,{weekday:"long",month:"long",day:"numeric"})} · ${item.kind==="meal"?"drop-off ~"+fmtTime(item.start):fmtRange(item.start,item.dur)}</p>
    <p class="small muted" style="margin:16px 0 8px">Add it to your calendar</p>${calLinks({...item,uid:S.me.id},true)}
+   ${S.authUser&&S.authUser.isAnonymous?`<p class="small muted" style="margin:18px 0 6px">Want your sign-ups on your other phone or in the Home Screen app?</p><button class="btn soft sm" data-act="acctsheet">Save them with your email</button>`:""}
    <div style="margin-top:20px"><button class="btn ghost" data-act="close">Done</button></div></div>`)}
 function copyText(txt,label){
   const done=()=>toast(label||"Copied");
@@ -1042,6 +1061,11 @@ function showCopy(txt){openSheet(sheetHead("Copy this","Select the text and copy
 document.addEventListener("click",async e=>{
   const a=e.target.closest("[data-act]");if(!e.target.closest("#pop")&&!(a&&(a.dataset.act==="selday"||a.dataset.act==="mealday"||a.dataset.act==="myday"||a.dataset.act==="anotherday")))closePop();if(!a)return;const act=a.dataset.act;if(a.closest("#pop")&&act!=="closepop")closePop();
   if(act==="close"){closeSheet();return}
+  if(act==="acctsheet"){accountSheet();return}
+  if(act==="forgotpw"){const f=a.closest("form");const em=f&&f.email?String(f.email.value).trim():"";if(!em){toast("Type your email first, then tap Forgot password");f&&f.email&&f.email.focus();return}
+    try{await FB.auth.reset(em);toast("Check your email for a link to set a new password 📬",4500)}catch(e){toast(authMsg(e),4500)}return}
+  if(act==="verify"){try{await FB.auth.verify();toast("Sent — tap the link in the email, then come back",4500)}catch(e){toast(authMsg(e),4500)}return}
+  if(act==="reloaduser"){try{const u=await FB.auth.reload();await onUser(u);toast(u&&u.emailVerified?"Email confirmed 💛":"Not confirmed yet — check your email")}catch(e){toast(authMsg(e))}return}
   if(act==="fillname"){const f=a.closest("form");if(f&&f.pname){f.pname.value=a.dataset.name;f.pname.classList.remove("err")}return}
   if(act==="iam"){if(!guardWrite())return;const n=a.dataset.name;try{await saveMine(d=>{d.name=n;return d});lsSet(n);toast(`Welcome back, ${n} 💛`)}catch(_){}return}
   if(act==="google"){try{await FB.auth.google();await onUser(FB.auth.current());closeSheet();toast("Signed in")}catch(e){if(e&&e.code!=="auth/popup-closed-by-user")toast("Google sign-in didn't finish. On the Home Screen app, use Sign in with email link instead.")}return}
@@ -1088,6 +1112,8 @@ document.addEventListener("click",async e=>{
     openSheet(sheetHead("Remove this sign-up?",esc(nameOf(u)))+`<div class="calrow"><button class="btn primary" data-act="dormitem" data-id="${esc(id)}" data-uid="${esc(u)}">Remove</button><button class="btn ghost" data-act="close">Keep</button></div>`);return}
   if(act==="dormitem"){const u=a.dataset.uid,id=a.dataset.id;const p=clone(S.people[u]);p.items=(p.items||[]).filter(x=>x.id!==id);try{await store.setPerson(u,p);closeSheet();toast("Removed")}catch(_){}return}
 });
+function authMsg(e){const c=e&&e.code||"";
+  return({"f40/wrong-password":"That password doesn't match this email. Tap Forgot password to set a new one.","auth/weak-password":"Pick a password with at least 6 characters.","auth/invalid-email":"That email doesn't look right.","auth/too-many-requests":"Too many tries — wait a few minutes and try again.","auth/operation-not-allowed":"Password sign-in isn't turned on yet — ask Patrick.","auth/requires-recent-login":"For safety, sign out and back in, then set your password.","auth/network-request-failed":"No connection — try again in a moment."})[c]||("That didn't work"+(c?" ("+c+")":"")+" — please try again.")}
 function applyName(d,fd){if(fd.has("pname")){d.name=String(fd.get("pname")).trim().slice(0,60);lsSet(d.name);d.phone=String(fd.get("pphone")||"").trim().slice(0,30)}return d}
 document.addEventListener("submit",async e=>{
   e.preventDefault();const f=e.target,kind=f.dataset.form;
@@ -1095,10 +1121,16 @@ document.addEventListener("submit",async e=>{
   f.querySelectorAll(".err").forEach(x=>x.classList.remove("err"));
   const bad=[...f.querySelectorAll("input,select,textarea")].find(x=>!x.checkValidity()||(x.required&&!String(x.value).trim()));
   if(bad){bad.classList.add("err");bad.scrollIntoView({behavior:"smooth",block:"center"});setTimeout(()=>bad.focus(),250);
-    toast(bad.name==="pname"?"Please add your name first ✍️":bad.type==="email"?"Please enter a valid email":bad.name==="dish"?"Tell us what you're bringing":"Please fill in the highlighted box",3200);return}
+    toast(bad.name==="pname"?"Please add your name first ✍️":bad.type==="email"?"Please enter a valid email":bad.type==="password"?"Password needs at least 6 characters":bad.name==="dish"?"Tell us what you're bringing":"Please fill in the highlighted box",3200);return}
   const fd=new FormData(f);const btn=f.querySelector('[type="submit"]');let label="";if(btn){btn.disabled=true;label=btn.textContent;btn.textContent="Saving…"}
   try{
     if(kind==="pastelink"){const l=String(fd.get("link")||"").trim();closeSheet();try{const ok=await FB.auth.finishLink(askEmail,l);if(!ok){toast("That doesn't look like the sign-in link — copy it from the email again.");return}await onUser(FB.auth.current());toast("You're signed in 💛");render()}catch(e){console.warn(e);toast("That link didn't work — it may have expired. Send a new one.")}return}
+    if(kind==="pw"){const em=String(fd.get("email")||"").trim(),pw=String(fd.get("pw")||"");try{localStorage.setItem("f40-email",em)}catch(_){}
+      try{const r=await FB.auth.password(em,pw);await onUser(FB.auth.current());closeSheet();
+        if(r.created&&OWNER_EMAILS.concat(S.admins).includes(em.toLowerCase())){try{await FB.auth.verify()}catch(_){}}
+        toast(r.created?"Account made — you're all set 💛":"You're signed in 💛",3500);render()}
+      catch(e){toast(authMsg(e),5000)}return}
+    if(kind==="setpw"){try{await FB.auth.setPassword(String(fd.get("pw")||""));f.reset();toast("Password saved — use it to sign in anywhere")}catch(e){toast(authMsg(e),5000)}return}
     if(kind==="sendlink"){const em=String(fd.get("email")||"").trim();await FB.auth.sendLink(em);openSheet(sheetHead("Check your email 📬",`We sent a sign-in link to <b>${esc(em)}</b>.`)+`<p class="muted">If you're in Safari, just tap the link in the email. If you're using the Home Screen icon, press and hold the link in the email, tap <b>Copy Link</b>, then come back here and tap <b>Paste link</b> under My Shifts. Not there in a minute? Check Junk.</p><button class="btn primary block" data-act="pastelink">Paste link</button><button class="btn ghost block" style="margin-top:8px" data-act="close">OK</button>`);return}
     if(kind==="admin"){const em=String(fd.get("email")||"").trim().toLowerCase();if(!em)return;await S.db.doc("admins/"+em).set({addedAt:Date.now()});f.reset();toast("Added — they'll get Elena's tab after signing in with that email");return}
     if(kind==="help"){const item={id:uid(),kind:"help",cat:fd.get("cat")||"other",title:String(fd.get("title")||"").trim(),date:fd.get("date"),start:fd.get("start"),dur:+fd.get("dur")||60,note:String(fd.get("note")||"").trim(),at:Date.now()};
