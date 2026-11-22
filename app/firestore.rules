@@ -1,0 +1,116 @@
+rules_version = '2';
+// The First 40 Days — multi-family version.
+// Every family has a private "circle". Only members can see anything in it.
+// Helpers join with the circle's invite code; managers (the mom and whoever she picks) run it.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    // Real (email/Google) accounts, not anonymous guests.
+    function realAccount() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    function circleDoc(c) { return /databases/$(database)/documents/circles/$(c); }
+    function isMember(c) {
+      return signedIn() && exists(/databases/$(database)/documents/circles/$(c)/members/$(me()));
+    }
+    function isManager(c) { return signedIn() && me() in get(circleDoc(c)).data.managers; }
+    // Same check, but sees writes in the same batch (used while a circle is being created).
+    function isManagerAfter(c) { return signedIn() && me() in getAfter(circleDoc(c)).data.managers; }
+    function str(v, max) { return v is string && v.size() <= max; }
+    function okStr(d, k, max) { return !(k in d) || str(d[k], max); }
+    function okNum(d, k) { return !(k in d) || d[k] is number; }
+
+    // Which circles a person belongs to (so the app can reopen them).
+    match /users/{u} {
+      allow read, delete: if signedIn() && me() == u;
+      allow create, update: if signedIn() && me() == u
+        && request.resource.data.keys().hasOnly(['circles', 'updatedAt'])
+        && request.resource.data.circles is list && request.resource.data.circles.size() <= 20;
+    }
+
+    match /circles/{c} {
+      allow read: if isMember(c);
+      allow create: if realAccount()
+        && request.resource.data.keys().hasOnly(['name', 'ownerUid', 'managers', 'plan', 'createdAt'])
+        && request.resource.data.ownerUid == me()
+        && request.resource.data.managers == [me()]
+        && request.resource.data.plan == 'trial'
+        && str(request.resource.data.name, 80)
+        && request.resource.data.createdAt is number;
+      // Managers can rename and choose managers, but never change the owner or the plan.
+      allow update: if isManager(c)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'managers'])
+        && str(request.resource.data.name, 80)
+        && request.resource.data.managers is list
+        && request.resource.data.managers.size() >= 1 && request.resource.data.managers.size() <= 10
+        && resource.data.ownerUid in request.resource.data.managers;
+      allow delete: if signedIn() && resource.data.ownerUid == me();
+
+      // The invite code: only managers can see or change it.
+      match /secrets/{id} {
+        allow read: if isManager(c);
+        allow write: if isManagerAfter(c) && id == 'invite'
+          && request.resource.data.keys().hasOnly(['code'])
+          && request.resource.data.code is string
+          && request.resource.data.code.size() >= 16 && request.resource.data.code.size() <= 64;
+      }
+
+      match /members/{m} {
+        allow read: if isMember(c);
+        allow create: if signedIn() && me() == m
+          && request.resource.data.keys().hasOnly(['name', 'role', 'code', 'joinedAt'])
+          && okStr(request.resource.data, 'name', 60)
+          && request.resource.data.joinedAt is number
+          && (
+            (request.resource.data.role == 'owner' && getAfter(circleDoc(c)).data.ownerUid == m)
+            || (request.resource.data.role == 'helper'
+                && request.resource.data.code
+                   == get(/databases/$(database)/documents/circles/$(c)/secrets/invite).data.code)
+          );
+        allow update: if signedIn() && me() == m
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+          && str(request.resource.data.name, 60);
+        allow delete: if signedIn() && resource.data.role != 'owner'
+          && (me() == m || isManager(c));
+      }
+
+      match /settings/{id} {
+        allow read: if isMember(c);
+        allow write: if isManagerAfter(c) && id == 'main' && request.resource.data.size() <= 60
+          && okStr(request.resource.data, 'mom', 40) && okStr(request.resource.data, 'partner', 40)
+          && okStr(request.resource.data, 'kid', 40) && okStr(request.resource.data, 'address', 200)
+          && okStr(request.resource.data, 'welcome', 1000) && okStr(request.resource.data, 'family', 120);
+      }
+
+      match /needs/{id} {
+        allow read: if isMember(c);
+        allow delete: if isManager(c);
+        allow create, update: if isManager(c)
+          && request.resource.data.keys().hasOnly(['cat', 'title', 'date', 'start', 'dur', 'spots', 'priority', 'note', 'at'])
+          && str(request.resource.data.date, 10) && str(request.resource.data.cat, 20)
+          && okStr(request.resource.data, 'title', 120) && okStr(request.resource.data, 'note', 500)
+          && okStr(request.resource.data, 'start', 5) && okNum(request.resource.data, 'dur')
+          && okNum(request.resource.data, 'spots') && okNum(request.resource.data, 'at');
+      }
+
+      // Each helper's own sign-ups. Members can see the schedule; only you (or a manager) can change yours.
+      match /people/{u} {
+        allow read: if isMember(c);
+        allow delete: if signedIn() && (me() == u || isManager(c));
+        allow create, update: if signedIn() && ((me() == u && isMember(c)) || isManager(c))
+          && request.resource.data.keys().hasOnly(['name', 'items', 'updatedAt'])
+          && str(request.resource.data.name, 60)
+          && request.resource.data.items is list && request.resource.data.items.size() <= 200;
+      }
+
+      // Phone numbers: only you and the managers.
+      match /contacts/{u} {
+        allow read: if signedIn() && ((me() == u && isMember(c)) || isManager(c));
+        allow write: if signedIn() && me() == u && isMember(c)
+          && request.resource.data.keys().hasOnly(['phone'])
+          && str(request.resource.data.phone, 30);
+      }
+    }
+  }
+}
