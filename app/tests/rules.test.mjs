@@ -16,10 +16,10 @@ before(async () => {
 });
 after(async () => { await env.cleanup(); });
 
-async function makeCircle(db, uid = "owner", c = C) {
+async function makeCircle(db, uid = "owner", c = C, code = CODE) {
   const b = writeBatch(db);
   b.set(doc(db, `circles/${c}`), { name: "Ana's circle", ownerUid: uid, managers: [uid], plan: "trial", createdAt: now });
-  b.set(doc(db, `circles/${c}/secrets/invite`), { code: CODE });
+  b.set(doc(db, `circles/${c}/secrets/invite`), { code });
   b.set(doc(db, `circles/${c}/members/${uid}`), { name: "Ana", role: "owner", joinedAt: now });
   b.set(doc(db, `circles/${c}/settings/main`), { mom: "Ana", family: "Ana · Ben · baby" });
   return b.commit();
@@ -124,7 +124,7 @@ test("each person's circle list is theirs alone", async () => {
 });
 
 test("one family can't see another family's circle", async () => {
-  await assertSucceeds(makeCircle(real("otherOwner"), "otherOwner", "circleB"));
+  await assertSucceeds(makeCircle(real("otherOwner"), "otherOwner", "circleB", "b".repeat(24)));
   await assertFails(getDoc(doc(guest("h1"), "circles/circleB/settings/main")));
   await assertFails(getDoc(doc(real("owner"), "circles/circleB")));
   await assertFails(join(guest("h1"), "h1", CODE, "helper", "circleB"));
