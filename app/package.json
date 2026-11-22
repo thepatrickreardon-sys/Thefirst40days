@@ -1,3 +1,15 @@
-{ "name": "first-40-days-app", "private": true, "type": "module",
-  "scripts": { "test:rules": "firebase emulators:exec --only firestore --project demo-f40 \"node --test tests/rules.test.mjs\"" },
-  "devDependencies": { "firebase-tools": "^14.27.0", "@firebase/rules-unit-testing": "^6.0.0", "firebase": "^13.0.0" } }
+{
+  "name": "first-40-days-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:rules": "firebase emulators:exec --only firestore --project demo-f40 \"node --test tests/rules.test.mjs\"",
+    "test:e2e": "firebase emulators:exec --only firestore,auth --project demo-f40 \"node tests/e2e.mjs\""
+  },
+  "devDependencies": {
+    "firebase-tools": "^14.27.0",
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "firebase": "^13.0.0",
+    "playwright": "^1.50.0"
+  }
+}

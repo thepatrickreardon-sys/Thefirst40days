@@ -129,3 +129,24 @@ test("one family can't see another family's circle", async () => {
   await assertFails(getDoc(doc(real("owner"), "circles/circleB")));
   await assertFails(join(guest("h1"), "h1", CODE, "helper", "circleB"));
 });
+
+test("an owner can delete her whole circle, then her own entry", async () => {
+  const db = real("delOwner"), c = "circleDel";
+  await assertSucceeds(makeCircle(db, "delOwner", c, "d".repeat(24)));
+  await assertSucceeds(join(guest("dh"), "dh", "d".repeat(24), "helper", c));
+  await assertSucceeds(setDoc(doc(guest("dh"), `circles/${c}/people/dh`), { name: "x", items: [], updatedAt: now }));
+  await assertSucceeds(setDoc(doc(guest("dh"), `circles/${c}/contacts/dh`), { phone: "1" }));
+  await assertFails(deleteDoc(doc(guest("dh"), `circles/${c}`)));
+  await assertFails(deleteDoc(doc(guest("dh"), `circles/${c}/settings/main`)));
+  for (const p of ["people/dh", "contacts/dh", "members/dh", "settings/main", "secrets/invite"])
+    await assertSucceeds(deleteDoc(doc(db, `circles/${c}/${p}`)));
+  await assertFails(deleteDoc(doc(db, `circles/${c}/members/delOwner`)));
+  await assertSucceeds(deleteDoc(doc(db, `circles/${c}`)));
+  await assertSucceeds(deleteDoc(doc(db, `circles/${c}/members/delOwner`)));
+});
+
+test("helpers can leave a circle", async () => {
+  await assertSucceeds(join(guest("leaver"), "leaver", "n".repeat(24)));
+  await assertSucceeds(deleteDoc(doc(guest("leaver"), `circles/${C}/members/leaver`)));
+  await assertFails(getDoc(doc(guest("leaver"), `circles/${C}/settings/main`)));
+});

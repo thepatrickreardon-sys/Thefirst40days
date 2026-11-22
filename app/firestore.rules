@@ -49,8 +49,8 @@ service cloud.firestore {
 
       // The invite code: only managers can see or change it.
       match /secrets/{id} {
-        allow read: if isManager(c);
-        allow write: if isManagerAfter(c) && id == 'invite'
+        allow read, delete: if isManager(c);
+        allow create, update: if isManagerAfter(c) && id == 'invite'
           && request.resource.data.keys().hasOnly(['code'])
           && request.resource.data.code is string
           && request.resource.data.code.size() >= 16 && request.resource.data.code.size() <= 64;
@@ -71,13 +71,16 @@ service cloud.firestore {
         allow update: if signedIn() && me() == m
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
           && str(request.resource.data.name, 60);
-        allow delete: if signedIn() && resource.data.role != 'owner'
-          && (me() == m || isManager(c));
+        allow delete: if signedIn() && (
+          (resource.data.role != 'owner' && (me() == m || isManager(c)))
+          // the owner's own entry goes last, after she deletes the whole circle
+          || (me() == m && !exists(circleDoc(c))));
       }
 
       match /settings/{id} {
         allow read: if isMember(c);
-        allow write: if isManagerAfter(c) && id == 'main' && request.resource.data.size() <= 60
+        allow delete: if isManager(c);
+        allow create, update: if isManagerAfter(c) && id == 'main' && request.resource.data.size() <= 60
           && okStr(request.resource.data, 'mom', 40) && okStr(request.resource.data, 'partner', 40)
           && okStr(request.resource.data, 'kid', 40) && okStr(request.resource.data, 'address', 200)
           && okStr(request.resource.data, 'welcome', 1000) && okStr(request.resource.data, 'family', 120);
@@ -107,7 +110,8 @@ service cloud.firestore {
       // Phone numbers: only you and the managers.
       match /contacts/{u} {
         allow read: if signedIn() && ((me() == u && isMember(c)) || isManager(c));
-        allow write: if signedIn() && me() == u && isMember(c)
+        allow delete: if signedIn() && ((me() == u && isMember(c)) || isManager(c));
+        allow create, update: if signedIn() && me() == u && isMember(c)
           && request.resource.data.keys().hasOnly(['phone'])
           && str(request.resource.data.phone, 30);
       }
