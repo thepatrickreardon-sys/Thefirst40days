@@ -95,6 +95,16 @@
    "who": "Patrick"
   },
   {
+   "id": "b1gw4wzx3ap",
+   "kind": "help",
+   "date": "2026-12-07",
+   "start": "17:00",
+   "dur": 30,
+   "cat": "freezer",
+   "label": "Drop off a freezer meal",
+   "who": "Tia"
+  },
+  {
    "id": "jhwxrd84bsf",
    "kind": "help",
    "date": "2026-12-23",
@@ -105,5 +115,5 @@
    "who": "Lauren"
   }
  ],
- "updated": "2026-11-19T17:39:55Z"
+ "updated": "2026-11-22T17:27:52Z"
 }
