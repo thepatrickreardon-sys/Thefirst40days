@@ -85,6 +85,16 @@
    "who": "Patrick"
   },
   {
+   "id": "vssodilbiiw",
+   "kind": "help",
+   "date": "2026-11-28",
+   "start": "14:00",
+   "dur": 90,
+   "cat": "talulah",
+   "label": "Time with Talulah",
+   "who": "Auntie"
+  },
+  {
    "id": "hc46l1997kn",
    "kind": "help",
    "date": "2026-12-04",
@@ -125,5 +135,5 @@
    "who": "Lauren"
   }
  ],
- "updated": "2026-11-23T02:01:34Z"
+ "updated": "2026-11-23T14:45:28Z"
 }
