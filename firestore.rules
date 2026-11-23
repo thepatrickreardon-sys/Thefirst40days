@@ -1,0 +1,82 @@
+rules_version = '2';
+// Security rules for the multi-family version of The First 40 Days.
+// Each family lives under /families/{familyId}. The family ID is a long random
+// code in the invite link, so only people who were sent the link can find a page.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function realAccount() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    function verifiedEmail() {
+      return signedIn() && request.auth.token.email != null && request.auth.token.email_verified == true;
+    }
+    function fam(f) { return get(/databases/$(database)/documents/families/$(f)).data; }
+    function isOwner(f) { return signedIn() && request.auth.uid in fam(f).ownerUids; }
+    // Owners, plus anyone the owners added by email (once that email is confirmed).
+    function isAdmin(f) {
+      return isOwner(f) || (verifiedEmail()
+        && exists(/databases/$(database)/documents/families/$(f)/admins/$(request.auth.token.email.lower())));
+    }
+    function familyExists(f) { return exists(/databases/$(database)/documents/families/$(f)); }
+
+    match /families/{f} {
+      // Open with the link; nobody can list every family. Owners can list their own.
+      allow get: if signedIn();
+      allow list: if realAccount() && request.auth.uid in resource.data.ownerUids;
+      allow create: if realAccount()
+        && request.resource.data.ownerUids == [request.auth.uid]
+        && request.resource.data.keys().hasOnly(['name', 'ownerUids', 'createdAt', 'createdBy'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 90
+        && request.resource.data.createdBy == request.auth.uid;
+      // Owners can rename the page but can't hand it away or lock co-owners out here.
+      allow update: if isOwner(f)
+        && request.resource.data.ownerUids == resource.data.ownerUids
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.keys().hasOnly(['name', 'ownerUids', 'createdAt', 'createdBy'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 90;
+      allow delete: if isOwner(f);
+
+      // The family's settings and requests: anyone with the link reads, the family writes.
+      match /settings/{id} {
+        allow read: if signedIn() && familyExists(f);
+        allow write: if isAdmin(f) && id == 'main';
+      }
+      match /needs/{id} {
+        allow read: if signedIn() && familyExists(f);
+        allow write: if isAdmin(f);
+      }
+
+      // Each helper writes only their own sign-ups; the family can tidy anyone's.
+      match /people/{uid} {
+        allow read: if signedIn() && familyExists(f);
+        allow delete: if isAdmin(f) || (signedIn() && request.auth.uid == uid);
+        allow create, update: if familyExists(f)
+          && (isAdmin(f) || (signedIn() && request.auth.uid == uid))
+          && request.resource.data.keys().hasOnly(['name', 'items', 'updatedAt'])
+          && request.resource.data.name is string && request.resource.data.name.size() <= 60
+          && request.resource.data.items is list && request.resource.data.items.size() <= 200;
+      }
+
+      // Phone numbers stay private: only the person and the family can see them.
+      match /contacts/{uid} {
+        allow read: if isAdmin(f) || (signedIn() && request.auth.uid == uid);
+        allow delete: if isAdmin(f) || (signedIn() && request.auth.uid == uid);
+        allow create, update: if familyExists(f) && signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['phone'])
+          && request.resource.data.phone is string && request.resource.data.phone.size() <= 30;
+      }
+
+      // Extra people who can manage this family's page.
+      // Co-manager emails are only visible to the family (and each person can check their own).
+      match /admins/{e} {
+        allow list: if isAdmin(f);
+        allow get: if isAdmin(f) || (verifiedEmail() && e == request.auth.token.email.lower());
+        allow write: if isAdmin(f);
+      }
+    }
+
+    // Everything else is closed.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

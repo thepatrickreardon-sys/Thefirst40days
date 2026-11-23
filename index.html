@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The First 40 Days</title>
+<meta name="theme-color" content="#FAF5EE">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="First 40 Days">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=12">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=12">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=12">
+<meta property="og:title" content="The First 40 Days">
+<meta name="description" content="Gather your people around a new baby: a shared sign-up for meals, help around the house and time with the big kids during the first 40 days.">
+<meta property="og:description" content="A circle of care for the first 40 days with a new baby">
+<meta property="og:image" content="og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<script type="module">
+// Backend adapter: exposes window.FB with a tiny db/auth API the app uses.
+// Live mode talks to Firebase. Demo mode (?demo, or no Firebase config yet) keeps everything in memory.
+import {FIREBASE_CONFIG} from "./config.js";
+const qs=new URLSearchParams(location.search);
+const DEMO=qs.has("demo")||!FIREBASE_CONFIG.apiKey;
+if(DEMO){
+  const {makeDemo}=await import("./demo.js");
+  window.FB=makeDemo(qs.get("demo")==="helper");window.FB.demo=true;window.dispatchEvent(new Event("fb-ready"));
+}else{
+const {initializeApp}=await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js");
+const {getFirestore,doc,collection,setDoc,updateDoc,deleteDoc,onSnapshot,getDoc,getDocs,query,where}=await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+const {getAuth,onIdTokenChanged,signInAnonymously,GoogleAuthProvider,OAuthProvider,signInWithPopup,linkWithPopup,signOut,sendSignInLinkToEmail,isSignInWithEmailLink,signInWithEmailLink,EmailAuthProvider,linkWithCredential,signInWithEmailAndPassword,createUserWithEmailAndPassword,updatePassword,sendPasswordResetEmail,sendEmailVerification,deleteUser}=await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js");
+const app=initializeApp(FIREBASE_CONFIG);
+const fs=getFirestore(app),auth=getAuth(app);
+const wrapDoc=d=>({id:d.id,exists:d.exists(),data:()=>d.data(),metadata:d.metadata});
+const wrapQ=q=>({docs:q.docs.map(wrapDoc),metadata:q.metadata});
+const ref=p=>doc(fs,p);
+const db={
+  doc:p=>({set:data=>setDoc(ref(p),data),update:data=>updateDoc(ref(p),data),delete:()=>deleteDoc(ref(p)),get:()=>getDoc(ref(p)).then(wrapDoc),
+    onSnapshot:(next,err)=>onSnapshot(ref(p),{includeMetadataChanges:false},d=>next(wrapDoc(d)),err)}),
+  collection:p=>({onSnapshot:(next,err)=>onSnapshot(collection(fs,p),q=>next(wrapQ(q)),err),get:()=>getDocs(collection(fs,p)).then(wrapQ)}),
+  // where(field, "array-contains", value)
+  query:(p,field,val)=>({get:()=>getDocs(query(collection(fs,p),where(field,"array-contains",val))).then(wrapQ)})
+};
+const EMAIL_KEY="f40-email-for-link";
+const here=()=>location.origin+location.pathname+location.search;
+async function linkOrSignIn(p){const u=auth.currentUser;
+  if(u&&u.isAnonymous){try{return await linkWithPopup(u,p)}catch(e){if(e.code==="auth/credential-already-in-use"||e.code==="auth/email-already-in-use")return signInWithPopup(auth,p);throw e}}
+  return signInWithPopup(auth,p)}
+const authApi={
+  current:()=>auth.currentUser,
+  onChange:cb=>onIdTokenChanged(auth,cb),
+  guest:()=>signInAnonymously(auth),
+  google:()=>linkOrSignIn(new GoogleAuthProvider()),
+  apple:()=>{const p=new OAuthProvider("apple.com");p.addScope("email");p.addScope("name");return linkOrSignIn(p)},
+  async sendLink(email){await sendSignInLinkToEmail(auth,email,{url:here(),handleCodeInApp:true});try{localStorage.setItem(EMAIL_KEY,email)}catch(_){}},
+  async finishLink(askEmail,pasted){const src=pasted||location.href;if(!isSignInWithEmailLink(auth,src))return false;let email="";try{email=localStorage.getItem(EMAIL_KEY)||""}catch(_){}
+    if(!email)email=await askEmail();if(!email)return false;const href=src;
+    if(!pasted){const q=new URLSearchParams(location.search);["apiKey","oobCode","mode","lang","continueUrl"].forEach(k=>q.delete(k));history.replaceState(null,"",location.pathname+(q.toString()?"?"+q:"")+location.hash)}
+    const u=auth.currentUser;
+    if(u&&u.isAnonymous){try{await linkWithCredential(u,EmailAuthProvider.credentialWithLink(email,href))}catch(e){if(e.code==="auth/credential-already-in-use"||e.code==="auth/email-already-in-use")await signInWithEmailLink(auth,email,href);else throw e}}
+    else await signInWithEmailLink(auth,email,href);
+    try{localStorage.removeItem(EMAIL_KEY)}catch(_){}return true},
+  async password(email,pw){
+    try{await signInWithEmailAndPassword(auth,email,pw);return{created:false}}
+    catch(e){if(!["auth/invalid-credential","auth/user-not-found","auth/wrong-password","auth/invalid-login-credentials"].includes(e.code))throw e}
+    const u=auth.currentUser;
+    try{if(u&&u.isAnonymous)await linkWithCredential(u,EmailAuthProvider.credential(email,pw));else await createUserWithEmailAndPassword(auth,email,pw);return{created:true}}
+    catch(e){if(e.code==="auth/email-already-in-use"||e.code==="auth/credential-already-in-use"){const x=new Error("wrong password");x.code="f40/wrong-password";throw x}throw e}},
+  setPassword:pw=>updatePassword(auth.currentUser,pw),
+  reset:email=>sendPasswordResetEmail(auth,email),
+  verify:()=>sendEmailVerification(auth.currentUser,{url:here()}),
+  async reload(){const u=auth.currentUser;if(u){await u.reload();await u.getIdToken(true)}return auth.currentUser},
+  deleteAccount:()=>deleteUser(auth.currentUser),
+  signOut:()=>signOut(auth)
+};
+window.FB={db,auth:authApi};window.dispatchEvent(new Event("fb-ready"));
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FAF5EE; --card:#FFFFFF; --ink:#2D2622; --ink2:#4A403A; --muted:#857870; --line:#EDE4D9; --line2:#E2D6C8;
+  --rose:#C2644E; --rose-d:#A9503C; --rose-s:#F7E4DD;
+  --sage:#6C8C73; --sage-s:#E2ECE2;
+  --honey:#C99532; --honey-s:#F8EDD3;
+  --plum:#8C6B92; --plum-s:#EFE5F0;
+  --sky:#5A82A0; --sky-s:#E2EBF2;
+  --r:20px; --shadow:0 1px 2px rgba(60,40,30,.05),0 6px 24px rgba(60,40,30,.06);
+  --serif:'Fraunces',Georgia,serif; --sans:'DM Sans',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+body.landing nav.tabs,body.landing .syncbtn{display:none}
+.brand a{color:inherit;text-decoration:none}
+html,body{margin:0}
+body{font-family:var(--sans);color:var(--ink);background:var(--bg);font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1200px 500px at 10% -10%,#F6E1D6 0,transparent 60%),radial-gradient(900px 500px at 110% 0,#E6EEE3 0,transparent 55%);background-attachment:fixed;min-height:100vh}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--rose-d)}
+.wrap{max-width:760px;margin:0 auto;padding:0 18px 120px}
+h1,h2,h3{font-family:var(--serif);font-weight:600;letter-spacing:-.01em;margin:0}
+.opt{color:var(--muted);font-weight:400;font-size:.85em}
+
+/* header */
+header.top{display:flex;align-items:center;gap:12px;padding:22px 0 10px}
+.mark{width:44px;height:44px;border-radius:12px;background:url(mark-96.png?v=12) center/cover no-repeat;box-shadow:0 4px 14px rgba(194,100,78,.35);flex:none}
+.brand h1{font-size:23px;line-height:1.1}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:14px}
+.brand{min-width:0;flex:1}
+.syncbtn{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line2);background:rgba(255,255,255,.85);border-radius:999px;padding:9px 14px;font-weight:600;font-size:14px;color:var(--ink2);box-shadow:var(--shadow)}
+.syncbtn:hover{background:#fff;color:var(--rose-d)}
+.syncbtn svg{width:18px;height:18px;color:var(--rose)}
+@media(max-width:480px){.syncbtn span{display:none}.syncbtn{padding:10px}.brand h1{font-size:20px}}
+.syncopt{display:flex;align-items:center;gap:14px;width:100%;text-align:left;border:1.5px solid var(--line);background:#fff;border-radius:16px;padding:14px 16px;margin-bottom:10px}
+.syncopt:hover{border-color:var(--rose);background:#FFF8F5}
+.syncopt .si{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;flex:none}
+.syncopt .si svg{width:24px;height:24px}
+.syncopt b{display:block;font-size:16px}
+.syncopt small{color:var(--muted);font-size:13px}
+.seg.full{display:flex;margin-bottom:14px}.seg.full button{flex:1;padding:9px}
+
+/* nav */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(255,253,250,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px 6px calc(8px + env(safe-area-inset-bottom))}
+nav.tabs .in{display:flex;gap:2px;width:100%;max-width:560px}
+nav.tabs button{flex:1;white-space:nowrap;border:0;background:none;padding:7px 2px 5px;border-radius:14px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;font-weight:600;letter-spacing:.01em}
+nav.tabs button svg{width:23px;height:23px}
+nav.tabs button.on{color:var(--rose-d);background:var(--rose-s)}
+@media(min-width:820px){
+  nav.tabs{position:sticky;top:0;bottom:auto;border:0;background:transparent;backdrop-filter:none;padding:6px 0 14px}
+  nav.tabs .in{background:rgba(255,255,255,.8);border:1px solid var(--line);border-radius:999px;padding:5px;max-width:none;box-shadow:var(--shadow);backdrop-filter:blur(12px)}
+  nav.tabs button{flex-direction:row;justify-content:center;font-size:14px;padding:9px 12px;border-radius:999px;gap:8px}
+  nav.tabs button svg{width:19px;height:19px}
+  .wrap{padding-bottom:60px}
+}
+
+/* cards & sections */
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);border:1px solid rgba(237,228,217,.7);padding:20px}
+section{margin-top:26px}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 2px 12px}
+.sec-h h2{font-size:21px}
+.sec-h .aside{color:var(--muted);font-size:14px}
+.stack>*+*{margin-top:10px}
+.banner{border-radius:16px;padding:12px 14px;font-size:14.5px;display:flex;gap:10px;align-items:flex-start;margin-top:10px}
+.banner.info{background:var(--sky-s);color:#2F4F66}
+.banner.warn{background:var(--honey-s);color:#6B4E12}
+
+/* hero */
+.hero{display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center;padding:24px;background:linear-gradient(160deg,#fff 0,#FFF8F3 100%)}
+.ring{position:relative;width:136px;height:136px}
+.ring svg{transform:rotate(-90deg)}
+.ring .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring .num b{font-family:var(--serif);font-size:44px;line-height:1;font-weight:600}
+.ring .num span{font-size:13px;color:var(--muted);margin-top:3px;font-weight:600}
+.hero h2{font-size:24px;line-height:1.15}
+.hero .sub{color:var(--muted);margin:6px 0 0;font-size:15px}
+.hero .welcome{margin:12px 0 0;font-family:var(--serif);font-style:italic;color:var(--ink2);font-size:16px}
+.cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+@media(max-width:560px){.hero{grid-template-columns:1fr;text-align:center;justify-items:center}.cta{justify-content:center}}
+
+/* buttons */
+.btn{border:0;border-radius:999px;padding:11px 18px;font-weight:600;font-size:15px;display:inline-flex;align-items:center;gap:8px;justify-content:center;transition:transform .08s,background .15s,box-shadow .15s;text-decoration:none;white-space:nowrap}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--rose);color:#fff;box-shadow:0 4px 14px rgba(194,100,78,.3)}
+.btn.primary:hover{background:var(--rose-d)}
+.btn.soft{background:var(--rose-s);color:var(--rose-d)}
+.btn.sage{background:var(--sage-s);color:#3F5E46}
+.btn.ghost{background:#fff;border:1px solid var(--line2);color:var(--ink2)}
+.btn.ghost:hover{background:#FBF7F2}
+.btn.sm{padding:7px 13px;font-size:13.5px}
+.btn svg{width:16px;height:16px;flex:none}
+.btn.block{width:100%;padding:14px;font-size:16px}
+.btn[disabled]{opacity:.5;pointer-events:none}
+.linkbtn{border:0;background:none;color:var(--rose-d);font-weight:600;padding:0;font-size:14px}
+
+/* coverage grid */
+.cov{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+@media(min-width:600px){.cov{grid-template-columns:repeat(10,1fr)}}
+.cell{aspect-ratio:1;border-radius:12px;background:#F7F1EA;border:1px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;font-size:13px;font-weight:600;color:var(--ink2);position:relative}
+.cell:hover{border-color:var(--line2)}
+.cell.past{opacity:.45}
+.cell.today{background:#fff;border:2px solid var(--rose);color:var(--rose-d)}
+.cell.full{background:var(--sage-s)}
+.cell.some{background:#F3EFE4}
+.cell .dots{display:flex;gap:3px;height:6px}
+.cell .dot{width:6px;height:6px;border-radius:50%}
+.dot.meal{background:var(--honey)}.dot.help{background:var(--sage)}.dot.need{background:#fff;box-shadow:inset 0 0 0 1.5px var(--rose)}
+.cell .star{position:absolute;top:3px;right:4px;font-size:9px;color:var(--rose)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}.legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%}
+
+/* rows */
+.row{display:flex;align-items:center;gap:13px;padding:13px 14px;border-radius:16px;background:#fff;border:1px solid var(--line)}
+.row .ico{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-size:21px;flex:none}
+.row .rb{flex:1;min-width:0}
+.row .rt{font-weight:600;font-size:15.5px;line-height:1.25}
+.row .rm{color:var(--muted);font-size:13.5px;margin-top:2px}
+.row .rn{font-size:13.5px;color:var(--ink2);margin-top:4px;background:#FAF6F1;border-radius:9px;padding:6px 9px}
+.row .ra{flex:none;display:flex;gap:6px;align-items:center}
+.row.open{border:1.5px dashed var(--line2);background:#FFFDFB}
+.row.pri{border:1.5px solid #E7B4A6;background:linear-gradient(90deg,#FFF6F2,#fff)}
+.row.pri.open{border-style:dashed}
+.who{display:inline-flex;align-items:center;gap:5px;font-weight:600;color:var(--ink2)}
+.you{background:var(--rose-s);color:var(--rose-d);border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700}
+.badge{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;vertical-align:middle}
+.badge.pri{background:var(--rose);color:#fff}
+.badge.ok{background:var(--sage-s);color:#3F5E46}
+.badge.open{background:var(--honey-s);color:#7A5714}
+.c-honey .ico,.ci.c-honey{background:var(--honey-s)} .c-rose .ico{background:var(--rose-s)} .c-sage .ico{background:var(--sage-s)} .c-sky .ico{background:var(--sky-s)} .c-plum .ico{background:var(--plum-s)}
+@media(max-width:480px){.row{padding:12px;gap:11px}.row .ico{width:38px;height:38px;font-size:19px}.row .ra .btn.sm{padding:7px 11px}}
+
+/* day blocks */
+.day{margin-top:22px}
+.day-h{display:flex;align-items:center;gap:12px;margin:0 2px 10px}
+.day-n{width:46px;height:46px;border-radius:14px;background:#fff;border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;flex:none}
+.day-n small{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em}
+.day-n b{font-family:var(--serif);font-size:19px;margin-top:2px}
+.day.is-today .day-n{background:var(--rose);border-color:var(--rose);color:#fff}
+.day.is-today .day-n small{color:#FBE0D8}
+.day-h .dt{font-weight:600}
+.day-h .dt span{display:block;font-weight:400;color:var(--muted);font-size:13.5px}
+.day-h .sp{flex:1}
+.empty{color:var(--muted);font-size:14px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.55);border:1px dashed var(--line2)}
+
+/* calendar */
+.seg{display:inline-flex;background:#F1E9DF;border-radius:999px;padding:3px}
+.seg button{border:0;background:none;border-radius:999px;padding:6px 14px;font-weight:600;font-size:13.5px;color:var(--muted)}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.cal{padding:12px}
+.cal-top{display:flex;align-items:center;justify-content:space-between;margin:2px 4px 12px}
+.cal-top h3{font-size:19px}
+.cal-dow,.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal-dow div{text-align:center;font-size:11.5px;font-weight:700;color:var(--muted);letter-spacing:.05em;padding-bottom:4px}
+.cc{min-height:74px;border-radius:12px;background:#FBF7F2;border:1.5px solid transparent;padding:5px;display:flex;flex-direction:column;gap:3px;text-align:left;font-size:12px;overflow:hidden;position:relative}
+.cc.out{background:transparent;opacity:.35;pointer-events:none}
+.cc.past{opacity:.55}
+.cc:hover{border-color:var(--line2)}
+.cc.sel{border-color:var(--ink);background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.cc .cd{display:flex;align-items:baseline;justify-content:space-between;gap:2px}
+.cc .cd b{font-size:14px;font-weight:700}
+.cc .cd small{font-size:9.5px;color:var(--muted);font-weight:700}
+.cc.today .cd b{background:var(--rose);color:#fff;border-radius:999px;min-width:22px;height:22px;display:inline-grid;place-items:center;padding:0 5px}
+.cc .mon{font-size:9.5px;font-weight:700;color:var(--rose-d);text-transform:uppercase;letter-spacing:.04em}
+.pill{display:flex;align-items:center;gap:3px;border-radius:6px;padding:2px 4px;font-size:11px;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill .pt{overflow:hidden;text-overflow:ellipsis}
+.pill.honey{background:var(--honey-s);color:#6B4E12}.pill.rose{background:var(--rose-s);color:var(--rose-d)}.pill.sage{background:var(--sage-s);color:#3F5E46}.pill.sky{background:var(--sky-s);color:#2F4F66}.pill.plum{background:var(--plum-s);color:#5E4363}
+.pill.open{background:#fff;box-shadow:inset 0 0 0 1.2px currentColor}
+.pill.pri{background:var(--rose);color:#fff}
+.more{font-size:10.5px;color:var(--muted);font-weight:700;padding-left:3px}
+@media(max-width:640px){.cc{min-height:62px;padding:4px;gap:2px}.pill .pt{display:none}.pill{justify-content:center;padding:1px 0;font-size:11px}.cc .pills{display:grid;grid-template-columns:1fr 1fr;gap:2px}.cc .cd small{display:none}}
+.cal-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin:12px 4px 2px}
+.cal-legend span{display:inline-flex;gap:5px;align-items:center}
+.cal-legend i{width:12px;height:12px;border-radius:4px;display:inline-block}
+
+/* day bubble */
+.pop{position:fixed;z-index:55;width:360px;max-height:70vh;overflow:auto;background:#FFFCF9;border-radius:22px;box-shadow:0 18px 50px rgba(45,38,34,.22),0 0 0 1px rgba(0,0,0,.04);padding:16px;display:none;animation:pop2 .18s ease}
+.pop.show{display:block}
+@keyframes pop2{from{opacity:0;transform:translateY(6px) scale(.98)}}
+.pop-arrow{position:fixed;z-index:56;pointer-events:none;width:16px;height:16px;background:#FFFCF9;transform:rotate(45deg);display:none;box-shadow:-2px -2px 4px rgba(0,0,0,.04)}
+.dm-h{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.dm-h h3{font-size:19px;line-height:1.15}
+.dm-h p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.dm-h .x{margin-left:auto;width:30px;height:30px;font-size:18px}
+.dm-sub{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:14px 2px 8px}
+.dm-line{display:flex;align-items:center;gap:9px;font-size:14px;padding:7px 9px;border-radius:11px;background:#F8F2EB;margin-bottom:5px}
+.dm-line .tm{color:var(--muted);font-size:12.5px;margin-left:auto;white-space:nowrap}
+.dm-open{display:flex;align-items:center;gap:9px;font-size:14px;padding:7px 7px 7px 10px;border-radius:12px;border:1.5px dashed var(--line2);margin-bottom:6px;background:#fff}
+.dm-open.pri{border-color:#E7B4A6;background:#FFF6F2}
+.dm-open .tx{flex:1;min-width:0}
+.dm-open .tx b{display:block;font-weight:600;line-height:1.2}
+.dm-open .tx span{font-size:12.5px;color:var(--muted)}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.tile{border:1px solid var(--line);background:#fff;border-radius:14px;padding:10px 4px 9px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--ink2);text-align:center;line-height:1.15;transition:transform .08s,border .12s,background .12s}
+.tile:hover{border-color:var(--rose);background:#FFF6F2}
+.tile:active{transform:scale(.96)}
+.tile .ti{font-size:22px}
+.tile.meal{background:var(--honey-s);border-color:#EED9A8}
+.dm-foot{margin-top:12px;text-align:center}
+
+.cc.nomeal{background:transparent;border:1px dashed var(--line)}
+.cc.mfull{background:#EEF4EC}
+.cc .nm{font-size:10.5px;color:#BBAea2;margin-top:auto}
+@media(max-width:640px){.mcal .pill .pt{display:inline;font-size:10px}.mcal .cc .pills{display:flex;flex-direction:column}.mcal .pill{justify-content:flex-start;padding:2px 3px}.mcal .pill .pe{display:none}.mcal .pill.honey{justify-content:center;font-size:15px;background:none}.mcal .pill.honey .pe{display:inline}.mcal .pill.honey .pt{display:none}.cal-top{flex-wrap:wrap;gap:2px}.cal-top h3{font-size:16px}}
+
+.cc.mine{background:#fff;border-color:var(--rose)}
+.cc.mine.sel{border-color:var(--ink)}
+
+/* chips */
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{border:1px solid var(--line2);background:#fff;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:600;color:var(--ink2);white-space:nowrap}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* meals */
+.mealstat{display:flex;align-items:center;gap:16px}
+.mealstat b{font-family:var(--serif);font-size:34px;font-weight:600;line-height:1}
+.bar{height:10px;background:#F1E9DF;border-radius:99px;overflow:hidden;flex:1}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--honey),#DDB25A);border-radius:99px}
+.notes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+@media(max-width:560px){.notes{grid-template-columns:1fr}}
+.note{background:#FBF7F2;border-radius:14px;padding:11px 13px}
+.note h4{margin:0 0 3px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.note p{margin:0;font-size:14.5px;white-space:pre-wrap}
+.note.alert{background:var(--rose-s)} .note.alert h4{color:var(--rose-d)}
+.dish{display:inline-block;background:var(--honey-s);color:#6B4E12;border-radius:999px;padding:5px 11px;font-size:13.5px;margin:0 6px 6px 0;font-weight:500}
+
+/* forms */
+.form{display:flex;flex-direction:column;gap:14px}
+.lbl{display:block;font-weight:600;font-size:14px;margin-bottom:6px;color:var(--ink2)}
+.field input,.field select,.field textarea{width:100%;border:1px solid var(--line2);background:#fff;border-radius:13px;padding:11px 13px;font-size:16px;outline:none;transition:border .15s,box-shadow .15s}
+.field textarea{resize:vertical;min-height:70px}
+.field input.err{border-color:var(--rose);box-shadow:0 0 0 3px var(--rose-s);background:#FFF8F5}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--rose);box-shadow:0 0 0 3px var(--rose-s)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:460px){.two{grid-template-columns:1fr}}
+.catgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+@media(min-width:560px){.catgrid{grid-template-columns:repeat(3,1fr)}}
+.catopt{position:relative;border:1.5px solid var(--line);border-radius:15px;padding:11px;display:flex;flex-direction:column;gap:2px;cursor:pointer;background:#fff;transition:border .12s,background .12s}
+.catopt input{position:absolute;opacity:0;pointer-events:none}
+.catopt .ci{font-size:22px}
+.catopt .cl{font-weight:600;font-size:14px;line-height:1.2;margin-top:3px}
+.catopt .ch{font-size:12px;color:var(--muted);line-height:1.25}
+.catopt:has(input:checked){border-color:var(--rose);background:#FFF6F2;box-shadow:0 0 0 3px var(--rose-s)}
+.durs{display:flex;flex-wrap:wrap;gap:7px}
+.durs label{cursor:pointer}
+.durs input{position:absolute;opacity:0;pointer-events:none}
+.durs span{display:inline-block;border:1.5px solid var(--line2);border-radius:999px;padding:7px 14px;font-weight:600;font-size:14px;background:#fff}
+.durs input:checked+span{background:var(--ink);border-color:var(--ink);color:#fff}
+.toggle{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:#FBF7F2;cursor:pointer}
+.toggle input{width:20px;height:20px;accent-color:var(--rose)}
+.toggle b{display:block;font-size:15px}
+.toggle small{color:var(--muted);font-size:13px}
+.toggle.pri{background:var(--rose-s)}
+.checks{display:flex;gap:8px;flex-wrap:wrap}
+.signed{font-size:14px;color:var(--muted);background:#FBF7F2;border-radius:12px;padding:10px 12px}
+
+/* sheet */
+.sheet-wrap{position:fixed;inset:0;z-index:60;display:none}
+.sheet-wrap.show{display:block}
+.sheet-bg{position:absolute;inset:0;background:rgba(45,38,34,.38);animation:fade .2s ease}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:92vh;overflow:auto;background:#FFFCF9;border-radius:26px 26px 0 0;padding:8px 20px calc(24px + env(safe-area-inset-bottom));animation:up .28s cubic-bezier(.2,.9,.3,1);box-shadow:0 -10px 40px rgba(0,0,0,.15)}
+.sheet::before{content:"";display:block;width:42px;height:5px;border-radius:9px;background:#E3D8CB;margin:4px auto 12px}
+@media(min-width:700px){.sheet{left:50%;top:50%;bottom:auto;transform:translate(-50%,-50%);width:600px;border-radius:26px;max-height:88vh;padding:22px 26px 26px;animation:pop .22s ease}.sheet::before{display:none}}
+.sheet-h{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:16px}
+.sheet-h h3{font-size:23px}
+.sheet-h p{margin:4px 0 0;color:var(--muted);font-size:14.5px}
+.x{border:0;background:#F3ECE4;width:34px;height:34px;border-radius:50%;font-size:20px;line-height:1;color:var(--ink2);flex:none}
+@keyframes up{from{transform:translateY(40px);opacity:0}}
+@keyframes pop{from{transform:translate(-50%,-48%) scale(.97);opacity:0}}
+@keyframes fade{from{opacity:0}}
+.success{text-align:center;padding:10px 0 4px}
+.success .big{font-size:46px}
+.calrow{display:flex;gap:8px;flex-wrap:wrap}
+.calrow.center{justify-content:center}
+.calbtn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line2);background:#fff;border-radius:999px;padding:8px 13px;font-size:13.5px;font-weight:600;color:var(--ink2);text-decoration:none}
+.calbtn:hover{background:#FBF7F2}
+.calbtn svg{width:16px;height:16px}
+
+/* toast */
+.toast{position:fixed;left:50%;top:18px;transform:translateX(-50%) translateY(-20px);background:var(--ink);color:#fff;padding:12px 18px;border-radius:14px;font-size:14.5px;font-weight:500;opacity:0;pointer-events:none;transition:all .25s;z-index:80;max-width:90vw;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.2)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+
+.tips{margin:0;padding:0;list-style:none}
+.tips li{display:flex;gap:11px;padding:9px 0;border-bottom:1px solid var(--line);font-size:15px}
+.tips li:last-child{border:0}
+.tips li span{flex:none}
+.muted{color:var(--muted)}
+.small{font-size:13.5px}
+.mt{margin-top:12px}
+.loading{padding:50px 0;text-align:center;color:var(--muted)}
+.spin{width:28px;height:28px;border:3px solid var(--line2);border-top-color:var(--rose);border-radius:50%;margin:0 auto 12px;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.admin-h{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.admin-h h3{font-size:19px}
+.admin-h .n{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--rose-s);color:var(--rose-d);font-weight:700;font-size:14px}
+.iconbtn{border:1px solid var(--line2);background:#fff;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-size:16px;color:var(--ink2)}
+.iconbtn.on{background:var(--rose);border-color:var(--rose);color:#fff}
+.foot{text-align:center;color:var(--muted);font-size:13px;margin-top:40px;font-family:var(--serif);font-style:italic}
+.prep-h{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
+.prep-h .ico{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:24px;flex:none}
+.prep-h h2{font-size:20px;line-height:1.2;margin:0}
+.prep-meta{font-size:13px;color:var(--muted);margin-top:4px}
+.prep-opts{display:flex;flex-direction:column;gap:8px}
+.prep-opt{text-align:left;border:1px solid var(--line);background:#fff;border-radius:14px;padding:12px 13px;font-size:14.5px;line-height:1.45;color:var(--ink2);position:relative}
+.prep-opt b{color:var(--ink)}
+.prep-opt .go{display:block;margin-top:6px;font-weight:600;font-size:13px;color:var(--rose-d)}
+.prep-opt:active{background:#FFF6F2}
+.prep-jump{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.ideas{margin-top:14px;background:#FBF7F2;border-radius:14px;padding:12px 13px}
+.ideas h4{margin:0 0 8px;font-size:15px}
+.idea-g{margin-bottom:6px}.idea-g small{display:block;font-weight:600;color:var(--muted);margin-bottom:5px}
+.prep-who{margin-top:14px;border-top:1px solid var(--line);padding-top:10px;font-size:14px;display:flex;flex-direction:column;gap:4px}
+.prep-who small{font-weight:600;color:var(--muted)}
+.prep-pick{display:flex;flex-direction:column;gap:8px}
+.pp{display:block;cursor:pointer}.pp input{position:absolute;opacity:0;pointer-events:none}
+.pp span{display:block;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;background:#fff}
+.pp span b{display:block;font-size:14.5px}.pp span small{display:block;color:var(--muted);font-size:12.5px;line-height:1.35;margin-top:2px}
+.pp:has(input:checked) span{border-color:var(--rose);background:#FFF6F2;box-shadow:0 0 0 3px var(--rose-s)}
+.idea-chips{margin-top:8px}.idea-chips .dish{border:0;cursor:pointer;font:inherit;font-size:13px}
+.namechips{display:flex;flex-wrap:wrap}.namechips .dish{border:0;cursor:pointer;font:inherit;font-size:14px}
+.other-ways{margin-top:14px}.other-ways summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--rose-d)}
+.subcard{padding:14px 16px;background:linear-gradient(160deg,#fff,#F3F7F1);border-color:#D8E5D6}.subcard.ok{background:var(--sage-s)}.calbtn.sub{font-weight:700}
+.arrow-hint{text-align:center;font-size:34px;color:var(--rose);margin-top:8px;animation:bob 1.2s ease-in-out infinite}@keyframes bob{50%{transform:translateY(8px)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="mark" role="img" aria-label="The First 40 Days"></div>
+    <div class="brand"><h1><a href="./" data-act="landing">The First 40 Days</a></h1><p id="familyLine">A circle of care for the first 40 days</p></div>
+    <button class="syncbtn" data-act="sync" aria-label="Sync to your calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M9 15.5l2 2 4-4"/></svg><span>Sync calendar</span></button>
+  </header>
+  <nav class="tabs"><div class="in" id="tabs"></div></nav>
+  <div id="banners"></div>
+  <main id="main"><div class="loading"><div class="spin"></div>Gathering the schedule…</div></main>
+  <div class="foot" id="footLine">Made with love for new families.</div>
+</div>
+<div class="sheet-wrap" id="sheetWrap"><div class="sheet-bg" data-act="close"></div><div class="sheet" role="dialog" aria-modal="true" id="sheet"></div></div>
+<div class="pop-arrow" id="popArrow"></div><div class="pop" id="pop" role="dialog"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- constants ---------- */
+// Wording is written once with placeholders and filled in from each family's settings:
+// {mom} = the person being cared for, {kid} = older child(ren), {parents} = "Maya or Sam" / "Maya".
+const CATS_T={
+  kid:{label:"Time with {kid}",icon:"🧸",color:"honey",hint:"Play, park, books, nap or bath help",needsKid:true},
+  baby:{label:"Hold the baby",icon:"👶",color:"rose",hint:"So {mom} can nap or shower"},
+  laundry:{label:"Laundry",icon:"🧺",color:"sky",hint:"Wash, fold & put away"},
+  cleaning:{label:"Tidy & clean",icon:"🧽",color:"sage",hint:"Dishes, kitchen, bathroom, floors"},
+  cook:{label:"Cook a meal here",icon:"🍲",color:"honey",hint:"Make a meal in our kitchen"},
+  serve:{label:"Serve a meal",icon:"🍽️",color:"rose",hint:"Plate it up & clean up after"},
+  errands:{label:"Groceries & errands",icon:"🛒",color:"sky",hint:"Store runs, pharmacy, pickups"},
+  company:{label:"Hang out",icon:"☕",color:"plum",hint:"Keep {mom} company — no hosting"},
+  night:{label:"Early or late help",icon:"🌙",color:"plum",hint:"Mornings, evenings, bedtime"},
+  other:{label:"Something else",icon:"✨",color:"sage",hint:"Tell us what you have in mind"}
+};
+/* ---------- getting ready (before baby) ---------- */
+const PREP_INTRO_T={title:"Help Us Get Ready for Baby",text:"We’re getting our home and our family ready to welcome the new baby. If you’d like to help, pick something that sounds like you. {wishes} would all make our lives a little sweeter right now."};
+const PREP_T={
+  kidplay:{label:"Hang Out With {kid}",icon:"🧸",color:"honey",meta:["60–90 minutes","One helper","Confirm plans with {parents}"],dur:90,start:"09:30",needsKid:true,
+    opts:[{k:"home",t:"Play at our house",d:"Keep {kid} company at home while we get a few things done. Books, art, building, dance parties: whatever they’re into that day."},
+      {k:"adventure",t:"Take {kid} on a little outing",d:"A walk, the playground, or the library. We’ll agree on the plan ahead of time."},
+      {k:"park",t:"Meet us at the park",d:"Come along and take the lead playing with {kid} so {mom} can have a little time to herself."}],
+    foot:"We’ll fill you in on the routine and have snacks ready.",allergy:true},
+  clothes:{label:"Sort & Organize",icon:"👕",color:"sky",meta:["60–90 minutes","One or two helpers"],dur:90,start:"10:00",
+    opts:[{k:"sort",t:"Sort baby clothes",d:"Fold, sort by size, and put away the newborn things so they’re easy to grab."},
+      {k:"bins",t:"Pack away & label",d:"Help pack up outgrown clothes and label bins."},
+      {k:"closet",t:"Make some room",d:"Help clear out and rearrange a few spaces to make room for the new baby."},
+      {k:"shelves",t:"General organizing",d:"An extra pair of hands to sort, fold, and put things away. We’ll decide what goes where."}]},
+  setup:{label:"Heavy Lifting & Setting Up",short:"Heavy lifting & setup",icon:"📦",color:"sage",meta:["About 90 minutes","Two helpers"],dur:90,start:"10:00",
+    opts:[{k:"down",t:"Bring things out of storage",d:"Help bring down the baby gear and supplies we’ve got stored away."},
+      {k:"up",t:"Put things into storage",d:"Help carry outgrown and seasonal things up to storage."},
+      {k:"furniture",t:"Move furniture",d:"Help move furniture and heavy bins and set up for the baby."},
+      {k:"supplies",t:"Set up supplies",d:"Help set out linens and supplies so everything’s ready when we need it."}]},
+  freezer:{label:"Stock the Postpartum Freezer",short:"Postpartum freezer",icon:"🍲",color:"honey",meta:["30-minute drop-off","or 90-minute cooking shift"],dur:30,start:"17:00",dish:true,
+    opts:[{k:"dropoff",t:"Drop off a freezer meal",d:"A family dinner, a few single portions, or something easy to eat with one hand. Porch drop-off is great.",dur:30},
+      {k:"cook",t:"Come cook with us",d:"We’ll agree on a recipe ahead of time, then cook, portion, label, and clean up together.",dur:90},
+      {k:"signature",t:"Make your favorite",d:"Got a great soup, stew, or breakfast burrito? Tell us what it is. We’d love to try it.",dur:30}],
+    ideas:[["Soups and stews",["Chicken, white bean, and kale soup","Beef and vegetable stew","Lentil, tomato, and spinach soup"]],
+      ["Freezer dinners",["Turkey meatballs in tomato sauce with rice","Black bean and sweet potato enchiladas","Shredded chicken with roasted vegetables and quinoa"]],
+      ["Breakfasts and one-handed snacks",["Egg and spinach breakfast burritos","Apple-cinnamon baked oatmeal","Turkey and veggie mini frittatas"]]],
+    tip:"Think warming, filling, and easy to reheat. Meals with protein, a grain or starchy vegetable, and some veggies are especially welcome.",
+    foot:"Please label the dish with its ingredients, the date, and how to reheat it. Check the allergy notes before you cook.",allergy:true},
+  yard:{label:"Lend a Hand Outside",short:"Outdoor help",icon:"🍂",color:"sage",meta:["90–120 minutes","Two or three helpers"],dur:120,start:"10:00",
+    opts:[{k:"leaves",t:"Yard cleanup",d:"Raking, picking up, and bagging or hauling debris."},
+      {k:"walks",t:"Tidy the entry",d:"Sweep and clear the walkways and front entry."},
+      {k:"furniture",t:"Put things away for the season",d:"Help move and store outdoor furniture and seasonal things."}],
+    foot:"Handy outdoors? Tell us what you like doing and we’ll have a job ready."},
+  mama:{label:"Pamper & Honor the Mama",short:"Pamper the mama",icon:"🌸",color:"rose",meta:["30–90 minutes","One helper","Before or after baby arrives"],dur:60,start:"14:00",
+    opts:[{k:"home",t:"A little pampering",d:"Got a special skill like braiding or massage? Or just bring tea and sit with {mom} for a while.",dur:60},
+      {k:"time",t:"Give {mom} some time to herself",d:"Cover things at home so she can get out for a bit, or after baby arrives, hold the baby so she can rest or shower.",dur:120},
+      {k:"outside",t:"Get outside together",d:"Come for a walk and some grown-up conversation.",dur:90},
+      {k:"moment",t:"Help mark the moment",d:"Flowers, a note to open after the birth, or a small blessing over tea.",dur:30}]}
+};
+const PREP_NOTE={lbl:"What would you love to help with?",ph:"Pick an option above or tell us what you’re really good at. Maybe you’re a champion drawer organizer, make a legendary stew, love taking little ones on adventures, or know how to make someone feel cared for. If you have an idea we haven’t listed, we’d love to hear it."};
+let CATS={},PREP={},PREP_INTRO={},FILTERS=[];
+let mom="Mom";
+// Fill the wording in from this family's settings. Runs whenever settings change.
+function applyFamily(){
+  const st=S.settings;mom=(st.momName||"").trim()||"Mom";
+  const kid=(st.kidName||"").trim(),partner=(st.partnerName||"").trim();
+  const wish=`a meal for the freezer, an extra pair of hands, or a little pampering for ${mom}`;
+  const V={mom,kid:kid||"the kids",parents:partner?`${mom} or ${partner}`:mom,wishes:kid?`Time with ${kid}, ${wish}`:wish[0].toUpperCase()+wish.slice(1)};
+  const fill=s=>typeof s==="string"?s.replace(/\{(\w+)\}/g,(m,k)=>V[k]!==undefined?V[k]:m):s;
+  const deep=o=>Array.isArray(o)?o.map(deep):(o&&typeof o==="object")?Object.fromEntries(Object.entries(o).map(([k,v])=>[k,deep(v)])):fill(o);
+  const keep=o=>Object.fromEntries(Object.entries(o).filter(([,v])=>kid||!v.needsKid));
+  CATS=deep(keep(CATS_T));PREP=deep(keep(PREP_T));PREP_INTRO=deep(PREP_INTRO_T);
+  FILTERS=[["all","Everything"],["open","Needs help"],["meals","Meals"]].concat(kid?[["kid",kid]]:[]).concat([["house","House help"],["care",`${mom} & baby`]]);
+}
+const catInfo=k=>CATS[k]||PREP[k]||CATS.other||CATS_T.other;
+const prepOpt=i=>{const c=PREP[i.cat];return c&&(c.opts.find(o=>o.k===i.opt))};
+const MEAL={icon:"🥘",color:"honey"};
+const MEALTYPES={breakfast:"Breakfast",lunch:"Lunch",dinner:"Dinner"};
+const FILTER_CATS={house:["laundry","cleaning","cook","serve","errands"],care:["baby","company","night"],kid:["kid"]};
+const DEFAULTS={startDate:"",born:false,babyName:"",dueText:"",momName:"",partnerName:"",kidName:"",family:"",address:"",welcome:"",
+  visitNotes:"Please wash your hands when you arrive.\nIf you're feeling even a little sick, please sit this one out.\nNo need to be entertained — help yourself to whatever you need.\nKeep visits gentle and short unless we ask you to stay.",
+  kidNotes:"",tz:"",
+  meals:{enabled:true,types:["dinner"],every:1,dropoff:"Between 4:30 and 6:00 pm",household:"",allergies:"",loves:"",avoid:"",instructions:"Leave it by the front door and send a text — no need to knock."}};
+const TZ=()=>S.settings.tz||Intl.DateTimeFormat().resolvedOptions().timeZone||"America/New_York";
+const fixCat=o=>o;
+
+/* ---------- utils ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad=n=>String(n).padStart(2,"0");
+const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse=s=>{const[y,m,d]=String(s).split("-").map(Number);return new Date(y,(m||1)-1,d||1)};
+const addDays=(s,n)=>{const d=parse(s);d.setDate(d.getDate()+n);return ymd(d)};
+const today=()=>ymd(new Date());
+const diffDays=(a,b)=>Math.round((parse(b)-parse(a))/86400000);
+const fmtDate=(s,o={weekday:"short",month:"short",day:"numeric"})=>parse(s).toLocaleDateString("en-US",o);
+const fmtTime=t=>{if(!t)return"";let[h,m]=t.split(":").map(Number);const ap=h>=12?"pm":"am";h=h%12||12;return m?`${h}:${pad(m)} ${ap}`:`${h} ${ap}`};
+const addMin=(t,dur)=>{const[h,m]=t.split(":").map(Number);const x=h*60+m+(+dur||0);return`${pad(Math.floor(x/60)%24)}:${pad(x%60)}`};
+const fmtRange=(t,d)=>`${fmtTime(t)} – ${fmtTime(addMin(t,d))}`;
+const fmtDur=m=>m<60?`${m} min`:(m===60?"1 hour":`${m/60} hours`);
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
+const clone=o=>JSON.parse(JSON.stringify(o||{}));
+function merge(a,b){const o=clone(a);for(const k in (b||{})){if(b[k]&&typeof b[k]==="object"&&!Array.isArray(b[k])&&o[k]&&typeof o[k]==="object")o[k]=merge(o[k],b[k]);else if(b[k]!==undefined)o[k]=b[k];}return o}
+
+/* ---------- state ---------- */
+const S={fid:null,family:null,myFamilies:null,live:false,db:null,user:null,me:{id:null,name:""},isAdmin:false,readOnly:false,authUser:null,admins:[],contacts:{},loaded:{s:false,n:false,p:false},stale:false,
+  settings:clone(DEFAULTS),needs:[],people:{},profiles:{},tab:"home",filter:"all",showPast:false,showPastMeals:false,view:"cal",mview:"cal",sel:null};
+let writeQ=Promise.resolve();
+
+/* ---------- derived ---------- */
+const start=()=>S.settings.startDate||today();
+const days=()=>Array.from({length:40},(_,i)=>addDays(start(),i));
+const dayNum=d=>diffDays(start(),d)+1;
+const inRange=d=>{const n=dayNum(d);return n>=1&&n<=40};
+const upcomingDays=()=>{const t=today();const f=days().filter(d=>d>=t);return f.length?f:days()};
+const mine=()=>{const m=S.people[S.me.id]||{name:"",items:[]};return{...m,phone:S.myContact||""}};
+const normName=n=>String(n||"").trim().toLowerCase().replace(/\s+/g," ");
+// Everything this person signed up for: this device plus any other phone/browser where they used the same name.
+const myAll=()=>{const me=S.me.id,nm=normName(mine().name);const own=(mine().items||[]).map(i=>({...i,uid:me}));
+  if(!nm)return own;return own.concat(Object.entries(S.people).filter(([u,d])=>u!==me&&normName(d.name)===nm).flatMap(([u,d])=>(d.items||[]).map(i=>({...i,uid:u,linked:true}))))};
+const knownNames=()=>{const seen={};for(const[u,d]of Object.entries(S.people)){if(u===S.me.id||!d.name||!(d.items||[]).length)continue;const k=normName(d.name);if(!seen[k])seen[k]=d.name.trim()}return Object.values(seen).sort((a,b)=>a.localeCompare(b))};
+const LS_NAME="f40-my-name";const lsGet=()=>{try{return localStorage.getItem(LS_NAME)||""}catch(_){return""}};const lsSet=v=>{try{v?localStorage.setItem(LS_NAME,v):localStorage.removeItem(LS_NAME)}catch(_){}};
+const allItems=()=>Object.entries(S.people).flatMap(([u,d])=>(d.items||[]).map(i=>({...i,uid:u})));
+const claimsFor=n=>allItems().filter(i=>i.needId===n.id);
+const isOpen=n=>claimsFor(n).length<(+n.spots||1);
+const mealSlots=()=>{const m=S.settings.meals;if(!m.enabled)return[];const ev=+m.every||1;const types=(m.types&&m.types.length?m.types:["dinner"]);
+  return days().flatMap((d,i)=>i%ev===0?types.map(t=>({date:d,type:t})):[])};
+const mealFor=(d,t)=>allItems().find(i=>i.kind==="meal"&&i.date===d&&i.mealType===t);
+function nameOf(u){if(u===S.me.id)return"You";return (S.people[u]&&S.people[u].name)||(S.profiles[u]&&S.profiles[u].name)||"A helper"}
+
+/* ---------- store adapter ---------- */
+const P=p=>`families/${S.fid}/${p}`;
+function handleErr(e){
+  console.warn(e);const c=e&&e.code;
+  if(c==="permission-denied")toast("That change isn't allowed from this account.",4000);
+  else if(c==="resource-exhausted")toast("Too many changes at once — try again in a minute.");
+  else toast("That didn't save"+(c?" ("+c+")":"")+" — check your connection and try again.",4500);
+  try{e._shown=true}catch(_){}throw e;
+}
+const store={
+  async setSettings(s){if(S.live){try{await S.db.doc(P("settings/main")).set(s)}catch(e){handleErr(e)}}else{S.settings=merge(DEFAULTS,s);render()}},
+  async setNeed(n){const {id,...body}=n;if(S.live){try{await S.db.doc(P("needs/"+id)).set(body)}catch(e){handleErr(e)}}else{S.needs=S.needs.filter(x=>x.id!==id).concat([n]);render()}},
+  async delNeed(id){if(S.live){try{await S.db.doc(P("needs/"+id)).delete()}catch(e){handleErr(e)}}else{S.needs=S.needs.filter(x=>x.id!==id);render()}},
+  async setPerson(u,doc){if(S.live){try{await Promise.race([S.db.doc(P("people/"+u)).set(doc),new Promise(r=>setTimeout(r,6000))])}catch(e){handleErr(e)}}else{S.people[u]=doc;render()}}
+};
+function saveMine(fn){
+  const p=writeQ.then(async()=>{const next=fn(clone(mine()));next.items=next.items||[];next.updatedAt=Date.now();
+    const phone=next.phone;delete next.phone;await store.setPerson(S.me.id,next);
+    if(phone!==undefined&&S.live&&phone!==(S.myContact||"")){try{await S.db.doc(P("contacts/"+S.me.id)).set({phone:phone||""});S.myContact=phone||""}catch(e){console.warn(e)}}});
+  writeQ=p.catch(()=>{});return p;
+}
+
+/* ---------- calendar ---------- */
+function evInfo(i){
+  const st=S.settings;let title,details=[];
+  if(i.kind==="meal"){title=`Bring ${(MEALTYPES[i.mealType]||"a meal").toLowerCase()} to ${mom} & family`;if(i.dish)details.push("Bringing: "+i.dish);
+    if(st.meals.instructions)details.push("Drop-off: "+st.meals.instructions);if(st.meals.allergies)details.push("Allergies: "+st.meals.allergies)}
+  else{const c=catInfo(i.cat);title=`${i.title||c.label} — for ${mom}`;if(PREP[i.cat]){details.push("Getting ready: "+c.label);if(i.dish)details.push("Bringing: "+i.dish);if(c.allergy&&st.meals.allergies)details.push("Allergies: "+st.meals.allergies)}}
+  if(i.note)details.push("Note: "+i.note);
+  details.push("From The First 40 Days sign-up");
+  return{title,details:details.join("\n"),loc:st.address||"",date:i.date,start:i.start||"17:00",dur:+i.dur||(i.kind==="meal"?30:60)};
+}
+function stamp(date,time,sep){const[h,m]=time.split(":").map(Number);const d=parse(date);d.setHours(h,m,0,0);return d}
+const compact=d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+const isoLocal=d=>`${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+function gcal(i){const e=evInfo(i);const s=stamp(e.date,e.start),en=new Date(s.getTime()+e.dur*60000);
+  return"https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(e.title)+"&dates="+compact(s)+"/"+compact(en)+"&details="+encodeURIComponent(e.details)+(e.loc?"&location="+encodeURIComponent(e.loc):"")+"&ctz="+encodeURIComponent(TZ())}
+function outlook(i){const e=evInfo(i);const s=stamp(e.date,e.start),en=new Date(s.getTime()+e.dur*60000);
+  return"https://outlook.live.com/calendar/0/deeplink/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&subject="+encodeURIComponent(e.title)+"&startdt="+encodeURIComponent(isoLocal(s))+"&enddt="+encodeURIComponent(isoLocal(en))+"&body="+encodeURIComponent(e.details)+(e.loc?"&location="+encodeURIComponent(e.loc):"")}
+function evText(i){const e=evInfo(i);return`${e.title}\n${fmtDate(e.date,{weekday:"long",month:"long",day:"numeric"})}, ${fmtRange(e.start,e.dur)}\n${e.details}`}
+const ICON_G='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
+function calLinks(i,center){return`<div class="calrow ${center?"center":""}">
+  <a class="calbtn" href="${esc(gcal(i))}" target="_blank" rel="noopener">${ICON_G}Google</a>
+  <a class="calbtn" href="${esc(outlook(i))}" target="_blank" rel="noopener">${ICON_G}Outlook</a>
+  ${true?`<button class="calbtn" data-act="icsone" data-id="${esc(i.id)}" data-uid="${esc(i.uid||S.me.id)}">${ICON_A}Apple</button>`:""}
+  <button class="calbtn" data-act="copyev" data-id="${esc(i.id)}" data-uid="${esc(i.uid||S.me.id)}">Copy details</button></div>`}
+const ICON_A='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.5 2-3.6 2.1-3.7-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.8-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.4.8s2.3-1.3 3.1-2.5c1-1.4 1.4-2.8 1.4-2.9 0 0-2.9-1.1-2.9-4.3zM13.9 5.2c.7-.9 1.2-2 1-3.2-1 0-2.2.7-3 1.6-.6.7-1.2 1.9-1 3.1 1.1.1 2.3-.6 3-1.5z"/></svg>';
+
+
+/* ---------- Apple Calendar (.ics inside a .zip, since pages can't save .ics directly) ---------- */
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC[(c^b[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
+function makeZip(name,text){
+  const data=new TextEncoder().encode(text),fn=new TextEncoder().encode(name),crc=crc32(data),n=data.length;
+  const now=new Date(),dt=((now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1))&0xFFFF,dd=(((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate())&0xFFFF;
+  const lh=new DataView(new ArrayBuffer(30));[[0,0x04034b50,4],[4,20,2],[6,0x0800,2],[8,0,2],[10,dt,2],[12,dd,2],[14,crc,4],[18,n,4],[22,n,4],[26,fn.length,2],[28,0,2]].forEach(([o,v,l])=>l===4?lh.setUint32(o,v,true):lh.setUint16(o,v,true));
+  const ch=new DataView(new ArrayBuffer(46));[[0,0x02014b50,4],[4,20,2],[6,20,2],[8,0x0800,2],[10,0,2],[12,dt,2],[14,dd,2],[16,crc,4],[20,n,4],[24,n,4],[28,fn.length,2],[30,0,2],[32,0,2],[34,0,2],[36,0,2],[38,0,4],[42,0,4]].forEach(([o,v,l])=>l===4?ch.setUint32(o,v,true):ch.setUint16(o,v,true));
+  const cdOff=30+fn.length+n,cdSize=46+fn.length;
+  const end=new DataView(new ArrayBuffer(22));[[0,0x06054b50,4],[4,0,2],[6,0,2],[8,1,2],[10,1,2],[12,cdSize,4],[16,cdOff,4],[20,0,2]].forEach(([o,v,l])=>l===4?end.setUint32(o,v,true):end.setUint16(o,v,true));
+  return new Blob([lh,fn,data,ch,fn,end],{type:"application/zip"});
+}
+const icsEsc=t=>String(t||"").replace(/\\/g,"\\\\").replace(/;/g,"\;").replace(/,/g,"\\,").replace(/\r?\n/g,"\\n");
+function fold(line){const out=[];let cur="",bytes=0;for(const ch of line){const b=new TextEncoder().encode(ch).length;if(bytes+b>73){out.push(cur);cur=" "+ch;bytes=1+b}else{cur+=ch;bytes+=b}}out.push(cur);return out.join("\r\n")}
+function vevent(uidv,title,date,start,dur,details,loc){
+  const s=stamp(date,start),e=new Date(s.getTime()+dur*60000),now=new Date();
+  const z=d=>`${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+  return["BEGIN:VEVENT","UID:"+uidv+"@first40days","DTSTAMP:"+z(now),"DTSTART:"+z(s),"DTEND:"+z(e),
+    "SUMMARY:"+icsEsc(title),details?"DESCRIPTION:"+icsEsc(details):"",loc?"LOCATION:"+icsEsc(loc):"",
+    "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+icsEsc(title),"TRIGGER:-PT1H","END:VALARM","END:VEVENT"].filter(Boolean)}
+function icsDoc(name,events){return["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//The First 40 Days//EN","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:"+icsEsc(name),...events.flat(),"END:VCALENDAR"].map(fold).join("\r\n")+"\r\n"}
+function appleSteps(f){return sheetHead("Almost there 📅","Your calendar file is downloading.")+`<ul class="tips">
+  <li><span>📱</span><div><b>On an iPhone:</b> tap <b>Add All</b> when it opens (or open it from Downloads).</div></li>
+  <li><span>💻</span><div><b>On a Mac:</b> double-click <b>${esc(f)}.ics</b> in Downloads. Calendar asks which calendar to add it to.</div></li>
+  <li><span>🔁</span><div>Tap <b>Sync calendar</b> again whenever new sign-ups come in. Each event has a 1-hour reminder.</div></li></ul>
+  <div class="mt"><button class="btn primary block" data-act="close">Got it</button></div>`}
+function googleSteps(f){return sheetHead("Almost there 📅","Your calendar file is downloading.")+`<ul class="tips">
+  <li><span>1</span><div>The file <b>${esc(f)}.ics</b> is in your Downloads.</div></li>
+  <li><span>2</span><div>On a computer, open <a href="https://calendar.google.com/calendar/r/settings/export" target="_blank" rel="noopener">Google Calendar → Settings → Import</a>.</div></li>
+  <li><span>3</span><div>Choose the .ics file, pick which calendar it goes in, and click <b>Import</b>. It shows up on your phone too.</div></li>
+  <li><span>🔁</span><div>Import again whenever new sign-ups come in.</div></li></ul>
+  <div class="mt"><button class="btn primary block" data-act="close">Got it</button></div>`}
+function familyEvents(){const ev=allItems().map(i=>itemEvent(i,true));
+  S.needs.filter(n=>isOpen(n)).forEach(n=>{const c=catInfo(n.cat);ev.push(vevent("need-"+n.id,`${n.priority?"★ ":""}Open: ${n.title||c.label}`,n.date,n.start,+n.dur||60,n.note||"",S.settings.address))});return ev}
+function myEvents(){return myAll().filter(i=>i.date>=today()).map(i=>itemEvent(i))}
+function syncSheet(){
+  if(!S.syncScope)S.syncScope=myAll().length?"mine":"family";
+  const sc=S.syncScope,n=sc==="mine"?myEvents().length:familyEvents().length;let last="";
+  try{const t=+localStorage.getItem("f40-synced");if(t)last=`Last synced ${new Date(t).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}`}catch(_){}
+  const G='<svg viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.2H3.1v2.6A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.4 13.9a6 6 0 0 1 0-3.8V7.5H3.1a10 10 0 0 0 0 9z"/><path fill="#EA4335" d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.8-2.8A10 10 0 0 0 3.1 7.5l3.3 2.6C7.2 7.7 9.4 5.9 12 5.9z"/></svg>';
+  openSheet(sheetHead("Sync to your calendar","Put the schedule on the calendar you already use.")+
+   (false?`<div class="card" style="padding:16px;margin-bottom:18px;background:linear-gradient(160deg,#fff,#F3F7F1);border-color:#D8E5D6">
+     <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="font-size:22px">🔄</span><b style="font-size:17px">Whole family schedule — updates itself</b></div>
+     <p class="small muted" style="margin:0 0 12px">Add the whole family schedule once and it keeps itself up to date: new sign-ups and cancellations show up on their own within a couple of hours.</p>
+     ${subButtons(FAMILY_ICS,"The First 40 Days")}
+     <p class="small muted" style="margin:10px 0 0">Tap one, then tap <b>Subscribe</b>. <button class="linkbtn" data-act="copyfeed">Copy the link instead</button></p></div>`:"")
++`${myCalCard()?`<div class="dm-sub" style="margin-top:0">Just your own shifts</div><div style="margin-bottom:18px">${myCalCard()}</div>`:""}
+   <div class="dm-sub" style="margin-top:0">Download a copy${last?` · ${last}`:""}</div>`+
+   `<div class="seg full"><button class="${sc==="mine"?"on":""}" data-act="syncscope" data-v="mine">My shifts</button><button class="${sc==="family"?"on":""}" data-act="syncscope" data-v="family">Whole family schedule</button></div>
+   <p class="small muted" style="margin:-4px 2px 14px">${sc==="mine"?`${n} upcoming shift${n===1?"":"s"} of yours.`:`${n} event${n===1?"":"s"}: every helper, meal and open request.`}</p>
+   ${true?`<button class="syncopt" data-act="syncgo" data-t="apple"><span class="si" style="background:#F2F2F4;color:#111">${ICON_A}</span><span><b>Apple Calendar</b><small>Mac, iPhone, iPad (iCal)</small></span></button>
+   <button class="syncopt" data-act="syncgo" data-t="google"><span class="si" style="background:#EEF3FD">${G}</span><span><b>Google Calendar</b><small>Imports everything at once</small></span></button>`
+   :`<div class="empty">Calendar downloads aren't available in this view. Use the Google or Outlook buttons on each shift in My Shifts instead.</div>`}
+   <p class="small muted" style="margin:8px 2px 0">This copies the schedule as it is right now. Tap <b>Sync calendar</b> again later to pick up new sign-ups.</p>`)}
+function itemEvent(i,withName){const e=evInfo(i);return vevent(i.id,(withName?nameOf(i.uid).replace(/^You$/,mine().name||"You")+": ":"")+e.title,e.date,e.start,e.dur,e.details,e.loc)}
+async function saveIcs(fileBase,calName,events,target){
+  if(!events.length){toast("Nothing to add yet.");return}
+  const blob=new Blob([icsDoc(calName,events)],{type:"text/calendar;charset=utf-8"});const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=fileBase+".ics";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);
+  try{localStorage.setItem("f40-synced",String(Date.now()))}catch(_){}
+  if(target==="quiet"){toast("Opening it in your calendar…");return}
+  openSheet(target==="google"?googleSteps(fileBase):appleSteps(fileBase));
+}
+
+/* ---------- add to home screen ---------- */
+let installEvt=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEvt=e;render()});
+window.addEventListener("appinstalled",()=>{installEvt=null;try{localStorage.setItem("f40-installed","1")}catch(_){}render()});
+const isStandalone=()=>(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true;
+const isIOS=()=>/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+const inAppBrowser=()=>/FBAN|FBAV|Instagram|Line\/|GSA\/|Snapchat/.test(navigator.userAgent);
+const lsFlag=k=>{try{return localStorage.getItem(k)==="1"}catch(_){return false}};
+function canInstall(){return!isStandalone()&&!lsFlag("f40-installed")&&(installEvt||isIOS()||/Android/.test(navigator.userAgent))}
+function installCard(dismissable){if(!canInstall()||(dismissable&&lsFlag("f40-hide-install")))return"";
+  return`<section><div class="card subcard" style="display:flex;align-items:center;gap:14px;position:relative;padding-right:${dismissable?40:16}px"><img src="apple-touch-icon.png" alt="" style="width:52px;height:52px;border-radius:12px"><div style="flex:1;min-width:0"><b>Add the app to your Home Screen</b><div class="small muted">Opens like a regular app, no searching for the link.</div></div><button class="btn primary sm" data-act="install">Add it</button>${dismissable?`<button class="x" data-act="hideinstall" aria-label="Not now" style="position:absolute;top:8px;right:8px;width:28px;height:28px;font-size:16px">×</button>`:""}</div></section>`}
+const SHARE_ICO='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0A84FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+function installSheet(){
+  if(installEvt){const e=installEvt;e.prompt();e.userChoice.then(r=>{if(r&&r.outcome==="accepted"){try{localStorage.setItem("f40-installed","1")}catch(_){}toast("Added 💛")}installEvt=null;render()}).catch(()=>{});return}
+  if(inAppBrowser()){openSheet(sheetHead("Open it in Safari first","This app was opened inside another app, which can't add it to your Home Screen.")+`<ul class="tips"><li><span>1</span><div>Tap the <b>•••</b> or menu button and choose <b>Open in Safari</b> (or Open in browser).</div></li><li><span>2</span><div>Then tap <b>Add it</b> again.</div></li></ul><div class="calrow" style="margin-top:12px"><button class="btn ghost" data-act="copylink">Copy the link</button></div>`);return}
+  if(isIOS()){openSheet(sheetHead("Add to your Home Screen","Three taps in Safari:")+`<ul class="tips">
+   <li><span>1</span><div>Tap the <b>Share</b> button ${SHARE_ICO}. It's at the bottom of Safari, or inside the <b>•••</b> button on newer iPhones.</div></li>
+   <li><span>2</span><div>Scroll down and tap <b>Add to Home Screen</b>.</div></li>
+   <li><span>3</span><div>Tap <b>Add</b>. The First 40 Days icon shows up next to your other apps.</div></li></ul>
+   <p class="small muted" style="margin:12px 2px 0">Already signed up in Safari? In the Home Screen app, open <b>My Shifts</b> and tap your name to bring your shifts over.</p>
+`);return}
+  openSheet(sheetHead("Add to your Home Screen","In Chrome:")+`<ul class="tips"><li><span>1</span><div>Tap the <b>⋮</b> menu at the top right.</div></li><li><span>2</span><div>Tap <b>Add to Home screen</b> (or <b>Install app</b>), then <b>Add</b>.</div></li></ul>`)}
+/* ---------- auto-updating calendars ---------- */
+const SITE=location.origin+location.pathname.replace(/index\.html$/,"");
+const FAMILY_ICS="";
+const inviteLink=()=>SITE+"?f="+encodeURIComponent(S.fid||"");
+async function feedKey(name){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("f40|"+normName(name)));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,16)}
+S.feed={name:"",url:"",ready:false};
+async function checkFeed(){return;const nm=normName(mine().name);if(!nm){S.feed={name:"",url:"",ready:false};return}if(S.feed.name===nm&&(S.feed.ready||S.feed.checking||Date.now()-(S.feed.at||0)<60000))return;
+  S.feed={name:nm,url:"",ready:false,checking:true};try{const url=SITE+"feed/me/"+(await feedKey(nm))+".ics";const r=await fetch(url,{method:"HEAD",cache:"no-store"});S.feed={name:nm,url,ready:r.ok,at:Date.now()}}catch(_){S.feed={name:nm,url:"",ready:false,at:Date.now()}}render()}
+const webcal=u=>u.replace(/^https?:/,"webcal:");
+const gSub=u=>"https://calendar.google.com/calendar/render?cid="+encodeURIComponent(webcal(u));
+const oSub=(u,n)=>"https://outlook.live.com/calendar/0/addfromweb?url="+encodeURIComponent(u)+"&name="+encodeURIComponent(n);
+const subscribed=()=>{try{return localStorage.getItem("f40-sub")==="1"}catch(_){return false}};
+function subButtons(url,name){return`<div class="calrow"><a class="calbtn sub" href="${esc(webcal(url))}" data-act="subbed">${ICON_A}iPhone / Mac</a><a class="calbtn sub" href="${esc(gSub(url))}" target="_blank" rel="noopener" data-act="subbed">${ICON_G}Google</a><a class="calbtn sub" href="${esc(oSub(url,name))}" target="_blank" rel="noopener" data-act="subbed">${ICON_G}Outlook</a></div>`}
+function myCalCard(compact){return"";
+  if(!normName(mine().name))return"";
+  if(!S.feed.ready)return S.feed.checking?"":`<div class="card subcard"><b>📅 Your own auto-updating calendar</b><div class="small muted" style="margin-top:4px">It's being set up and is usually ready within 30 minutes of your first sign-up. Check back here, or add this shift with the buttons ${compact?"above":"on each shift"} for now.</div></div>`;
+  if(subscribed())return`<div class="card subcard ok"><b>✓ Your calendar is connected</b><div class="small muted" style="margin-top:4px">New sign-ups and cancellations show up on their own, usually within an hour. <button class="linkbtn" data-act="resub">Connect another calendar</button></div></div>`;
+  return`<div class="card subcard"><b>📅 Put all my shifts on my calendar</b><div class="small muted" style="margin:4px 0 12px">One tap, then tap <b>Subscribe</b>. Every shift you sign up for, now and later, shows up on its own.</div>${subButtons(S.feed.url,"First 40 Days")}</div>`}
+/* ---------- UI bits ---------- */
+function toast(m,ms=2600){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),ms)}
+function openSheet(html){$("#sheet").innerHTML=html;$("#sheetWrap").classList.add("show");document.body.style.overflow="hidden";$("#sheet").scrollTop=0}
+function closeSheet(){$("#sheetWrap").classList.remove("show");document.body.style.overflow=""}
+const NAVICONS={
+  home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
+  schedule:ICON_G.replace('stroke-width="2"','stroke-width="1.9"'),
+  meals:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18a8 8 0 0 1-8 8h-2a8 8 0 0 1-8-8z"/><path d="M8 8c0-1.5 1-1.5 1-3M12 8c0-1.5 1-1.5 1-3M16 8c0-1.5 1-1.5 1-3"/></svg>',
+  mine:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>',
+  prep:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V11"/><path d="M12 11c0-4 3-7 8-7 0 5-3 7-8 7z"/><path d="M12 14c0-3-2.5-5-7-5 0 4 2.5 5 7 5z"/></svg>',
+  manage:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 20s-7-4.4-9-9.2C1.7 7.5 3.8 4 7.2 4c2 0 3.4 1.1 4.8 2.8C13.4 5.1 14.8 4 16.8 4c3.4 0 5.5 3.5 4.2 6.8C19 15.6 12 20 12 20z"/></svg>'
+};
+function renderTabs(){
+  if(!S.fid){$("#tabs").innerHTML="";return}
+  const tabs=[["home","Home"],["prep","Get Ready"],["schedule","Schedule"],["meals","Meal Train"],["mine","My Shifts"]];
+  if(S.isAdmin)tabs.push(["manage","Manage"]);
+  $("#tabs").innerHTML=tabs.map(([k,l])=>`<button class="${S.tab===k?"on":""}" data-act="tab" data-tab="${k}">${NAVICONS[k]}<span>${l}</span></button>`).join("");
+}
+function renderBanners(){
+  let h="";
+  if(window.FB&&FB.demo)h+=`<div class="banner info"><span>👀</span><div><b>Demo page.</b> Try anything: nothing here is saved. ${S.fid==="demo"?`<a href="?${new URLSearchParams(location.search).get("demo")==="helper"?"demo":"demo=helper"}">See it as ${new URLSearchParams(location.search).get("demo")==="helper"?"the mom":"a helper"}</a>`:""}</div></div>`;
+  if(!S.live)h+=`<div class="banner warn"><span>⏳</span><div>Connecting to the family schedule…</div></div>`;
+  if(S.stale)h+=`<div class="banner warn"><span>⏳</span><div>Having trouble reaching the shared schedule — what you see may be out of date.</div></div>`;
+  $("#banners").innerHTML=h;
+}
+function daySelect(name,sel){const opts=upcomingDays();if(sel&&!opts.includes(sel))sel=opts[0];
+  return`<select name="${name}">${opts.map(d=>`<option value="${d}" ${d===sel?"selected":""}>Day ${dayNum(d)} · ${fmtDate(d)}${d===today()?" (today)":""}</option>`).join("")}</select>`}
+function allDaySelect(name,sel){return`<select name="${name}">${days().map(d=>`<option value="${d}" ${d===sel?"selected":""}>Day ${dayNum(d)} · ${fmtDate(d)}</option>`).join("")}</select>`}
+function timeSelect(name,sel){let o="";for(let m=6*60;m<=22*60;m+=30){const t=`${pad(Math.floor(m/60))}:${pad(m%60)}`;o+=`<option value="${t}" ${t===sel?"selected":""}>${fmtTime(t)}</option>`}return`<select name="${name}">${o}</select>`}
+function durChips(name,sel){return`<div class="durs">${[30,60,90,120,180,240,360].map(m=>`<label><input type="radio" name="${name}" value="${m}" ${m===sel?"checked":""}><span>${fmtDur(m)}</span></label>`).join("")}</div>`}
+function nameFields(){const me=mine();
+  if(me.name)return`<div class="signed">Signing up as <b>${esc(me.name)}</b> · <button type="button" class="linkbtn" data-act="tab" data-tab="mine">change</button></div>`;
+  const names=knownNames();
+  return`${names.length?`<div class="field"><label class="lbl">Signed up before? Tap your name</label><div class="namechips">${names.map(n=>`<button type="button" class="dish" data-act="fillname" data-name="${esc(n)}">${esc(n)}</button>`).join("")}</div></div>`:""}<div class="two"><div class="field"><label class="lbl">Your name</label><input name="pname" required placeholder="e.g. Aunt Maria" value="${esc(S.me.name||lsGet())}"></div>
+  <div class="field"><label class="lbl">Phone <span class="opt">optional</span></label><input name="pphone" type="tel" placeholder="So ${esc(mom)} can text you"></div></div>`}
+function sheetHead(t,sub){return`<div class="sheet-h"><div><h3>${t}</h3>${sub?`<p>${sub}</p>`:""}</div><button class="x" type="button" data-act="close" aria-label="Close">×</button></div>`}
+function guardWrite(){if(!S.me.id){toast("Still connecting — try again in a second.");return false}return true}
+
+/* ---------- rows ---------- */
+function needRow(n,opts={}){
+  const c=catInfo(n.cat),cl=claimsFor(n),open=isOpen(n),spots=+n.spots||1;
+  const mineClaim=cl.find(x=>x.uid===S.me.id);
+  const who=cl.length?cl.map(x=>`<span class="who">${esc(nameOf(x.uid))}</span>`).join(", "):"";
+  const when=(opts.showDate?`${fmtDate(n.date)} · `:"")+fmtRange(n.start,n.dur);
+  let act="";
+  if(mineClaim)act=`<span class="badge ok">You're on it</span>`;
+  else if(open)act=`<button class="btn ${n.priority?"primary":"soft"} sm" data-act="claim" data-id="${esc(n.id)}">I'll do it</button>`;
+  else act=`<span class="badge ok">Covered</span>`;
+  return`<div class="row c-${c.color} ${open&&!mineClaim?"open":""} ${n.priority?"pri":""}">
+   <div class="ico">${c.icon}</div>
+   <div class="rb"><div class="rt">${n.priority?`<span class="badge pri">★ ${esc(mom)}'s priority</span> `:""}${esc(n.title||c.label)}</div>
+    <div class="rm">${when}${spots>1?` · ${cl.length}/${spots} helpers`:""}${who?` · ${who}`:(open?" · needs someone":"")}</div>
+    ${n.note?`<div class="rn">${esc(n.note)}</div>`:""}</div>
+   <div class="ra">${act}</div></div>`}
+function itemRow(i,opts={}){
+  const isMeal=i.kind==="meal";const c=isMeal?MEAL:(catInfo(i.cat));
+  const t=isMeal?`${MEALTYPES[i.mealType]||"Meal"}: ${esc(i.dish||"A homemade meal")}`:esc(i.title||c.label);
+  const when=(opts.showDate?`${fmtDate(i.date)} · `:"")+(isMeal?`drop-off ~${fmtTime(i.start||"17:00")}`:fmtRange(i.start,i.dur));
+  return`<div class="row c-${c.color}"${opts.flat?' style="border:0;padding:0;background:none"':""}><div class="ico">${c.icon}</div>
+   <div class="rb"><div class="rt">${t}</div><div class="rm">${when} · ${i.uid===S.me.id||i.linked?`<span class="you">You</span>`:`<span class="who">${esc(nameOf(i.uid))}</span>`}</div>
+   ${i.note?`<div class="rn">${esc(i.note)}</div>`:""}</div>${opts.actions||""}</div>`}
+function mealOpenRow(d,t,opts={}){return`<div class="row c-honey open"><div class="ico">${MEAL.icon}</div>
+  <div class="rb"><div class="rt">${MEALTYPES[t]} — open</div><div class="rm">${opts.showDate?fmtDate(d)+" · ":""}Meal train · ${esc(S.settings.meals.dropoff||"")}</div></div>
+  <div class="ra"><button class="btn soft sm" data-act="meal" data-date="${d}" data-type="${t}">Bring it</button></div></div>`}
+
+/* ---------- views ---------- */
+function hero(){
+  const st=S.settings,t=today();let big,label,head,sub,pct=0;
+  const loose=!st.born&&String(st.dueText||"").trim();
+  if(loose){big="💛";label="on the way";head="Getting ready";sub=`Baby is expected ${esc(loose)}. The 40 days begin when baby arrives.`}
+  else if(!st.startDate){big="40";label="days";head="A circle of care";sub=`${mom} will add the baby's arrival date soon. You can already sign up to help.`}
+  else{const n=diffDays(st.startDate,t)+1;const nice=fmtDate(st.startDate,{weekday:"long",month:"long",day:"numeric"});
+    if(n<1){big=String(1-n);label=(1-n)===1?"day to go":"days to go";head=st.born?"Welcome, little one":"Getting ready";sub=`${st.babyName?esc(st.babyName)+" is":"Baby is"} ${st.born?"here":"due"} ${nice}. The 40 days begin then.`}
+    else if(n<=40){big=String(n);label="of 40";pct=n/40;head=st.born?(st.babyName?`${esc(st.babyName)} is ${n===1?"brand new":n-1+" day"+(n===2?"":"s")+" old"}`:`Day ${n}`):`Day ${n}`;sub=`${40-n===0?"Last day of":40-n+" days left in"} our first 40 days.`}
+    else{big="40";label="complete";pct=1;head="We made it 💛";sub="The first 40 days are done. Thank you for holding us up."}}
+  const C=2*Math.PI*58;
+  return`<div class="card hero"><div class="ring"><svg width="136" height="136" viewBox="0 0 136 136">
+   <circle cx="68" cy="68" r="58" fill="none" stroke="#F3E7DC" stroke-width="10"/>
+   <circle cx="68" cy="68" r="58" fill="none" stroke="url(#g)" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-pct)}"/>
+   <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#E8957F"/><stop offset="1" stop-color="#C2644E"/></linearGradient></defs></svg>
+   <div class="num"><b>${big}</b><span>${label}</span></div></div>
+   <div><h2>${head}</h2><p class="sub">${sub}</p>
+   <p class="welcome">${esc(st.welcome||"Thank you for wrapping our family in care. Pick something that fits your day — it all helps more than you know.")}</p>
+   <div class="cta"><button class="btn primary" data-act="help">＋ Offer help</button><button class="btn ghost" data-act="meal">🥘 Bring a meal</button></div></div></div>`}
+function coverage(){
+  const t=today(),items=allItems();
+  const cells=days().map(d=>{const its=items.filter(i=>i.date===d);const nd=S.needs.filter(n=>n.date===d);
+    const openN=nd.filter(isOpen);const meal=its.some(i=>i.kind==="meal");const help=its.some(i=>i.kind!=="meal");
+    const slots=mealSlots().filter(s=>s.date===d);const mealsOk=slots.every(s=>mealFor(s.date,s.type));
+    const pri=openN.some(n=>n.priority);
+    const full=(meal||!slots.length)&&mealsOk&&help&&!openN.length;
+    const cls=[d<t?"past":"",d===t?"today":"",full?"full":((meal||help)?"some":"")].join(" ");
+    return`<button class="cell ${cls}" data-act="goday" data-date="${d}" title="${fmtDate(d)}">${pri?'<span class="star">★</span>':""}${dayNum(d)}
+     <span class="dots">${meal?'<i class="dot meal"></i>':""}${help?'<i class="dot help"></i>':""}${openN.length?'<i class="dot need"></i>':""}</span></button>`}).join("");
+  return`<section><div class="sec-h"><h2>The 40 days at a glance</h2><span class="aside">Tap a day</span></div>
+   <div class="card"><div class="cov">${cells}</div>
+   <div class="legend"><span><i class="dot meal"></i>Meal covered</span><span><i class="dot help"></i>Helper scheduled</span><span><i class="dot need"></i>Open request</span><span style="color:var(--rose)">★ ${esc(mom)}'s priority</span></div></div></section>`}
+function homeView(){
+  const t=today();
+  const openNeeds=S.needs.filter(n=>n.date>=t&&isOpen(n)&&inRange(n.date)).sort((a,b)=>(b.priority?1:0)-(a.priority?1:0)||(a.date+a.start).localeCompare(b.date+b.start));
+  const pri=openNeeds.filter(n=>n.priority),rest=openNeeds.filter(n=>!n.priority).slice(0,4);
+  const openMeals=mealSlots().filter(s=>s.date>=t&&!mealFor(s.date,s.type)).slice(0,2);
+  const soon=allItems().filter(i=>i.date>=t).sort((a,b)=>(a.date+(a.start||"")).localeCompare(b.date+(b.start||""))).slice(0,6);
+  const st=S.settings;
+  let h=hero()+installCard(true);
+  if(pri.length)h+=`<section><div class="sec-h"><h2>★ ${esc(mom)}'s priorities</h2><span class="aside">What would help most</span></div><div class="stack">${pri.map(n=>needRow(n,{showDate:true})).join("")}</div></section>`;
+  h+=`<section><div class="sec-h"><h2>Open requests</h2><button class="linkbtn" data-act="tab" data-tab="schedule">See all</button></div><div class="stack">`+
+    (rest.length||openMeals.length?rest.map(n=>needRow(n,{showDate:true})).join("")+openMeals.map(s=>mealOpenRow(s.date,s.type,{showDate:true})).join("")
+     :`<div class="empty">Nothing open right now — but you can always <button class="linkbtn" data-act="help">offer your own time</button>.</div>`)+`</div></section>`;
+  if(!st.born)h+=`<section><div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:linear-gradient(160deg,#fff,#F4F8F2)"><div style="font-size:30px">🌱</div><div style="flex:1;min-width:200px"><b>Help us get ready for baby</b><div class="small muted">${S.settings.kidName?"Play with "+esc(S.settings.kidName)+", s":"S"}tock the freezer, lend a hand around the house or pamper ${esc(mom)} before the big day.</div></div><button class="btn primary sm" data-act="tab" data-tab="prep">See how</button></div></section>`;
+  h+=coverage();
+  h+=`<section><div class="sec-h"><h2>Coming up</h2><span class="aside">Who's helping</span></div><div class="stack">${soon.length?soon.map(i=>itemRow(i,{showDate:true})).join(""):`<div class="empty">No one's on the schedule yet. Be the first!</div>`}</div></section>`;
+  const tips=String(st.visitNotes||"").split("\n").filter(Boolean);
+  h+=`<section><div class="sec-h"><h2>Before you come over</h2></div><div class="card">
+   ${st.meals.allergies?`<div class="note alert" style="margin-bottom:12px"><h4>⚠️ Food allergies</h4><p>${esc(st.meals.allergies)}</p></div>`:""}
+   ${tips.length?`<ul class="tips">${tips.map(x=>`<li><span>🤍</span>${esc(x)}</li>`).join("")}</ul>`:""}
+   ${st.kidNotes&&st.kidName?`<div class="note mt"><h4>🧸 ${esc(st.kidName)}'s routine</h4><p>${esc(st.kidNotes)}</p></div>`:""}
+   ${st.address?`<div class="note mt"><h4>📍 Where</h4><p>${esc(st.address)}</p></div>`:""}</div></section>`;
+  return h}
+function matchFilter(kind,cat){const f=S.filter;if(f==="all")return true;if(f==="meals")return kind==="meal";if(f==="open")return false;return(FILTER_CATS[f]||[]).includes(cat)}
+function dayRows(d){
+  const rows=[],items=allItems();
+  S.needs.filter(n=>n.date===d).forEach(n=>{if(S.filter==="open"?isOpen(n):matchFilter("help",n.cat))rows.push([n.start,needRow(n),{cls:(catInfo(n.cat)).color,icon:(catInfo(n.cat)).icon,t:n.title||(catInfo(n.cat)).label,open:isOpen(n),pri:n.priority&&isOpen(n)}])});
+  items.filter(i=>i.date===d&&!(i.needId&&S.needs.some(n=>n.id===i.needId))).forEach(i=>{if(S.filter!=="open"&&matchFilter(i.kind,i.cat)){const m=i.kind==="meal";const c=m?MEAL:(catInfo(i.cat));rows.push([i.start||"17:00",itemRow(i),{cls:c.color,icon:c.icon,t:m?(i.dish||MEALTYPES[i.mealType]):(i.title||c.label)}])}});
+  mealSlots().filter(s=>s.date===d&&!mealFor(s.date,s.type)).forEach(s=>{if(S.filter==="all"||S.filter==="meals"||S.filter==="open")rows.push([s.type==="dinner"?"17:00":s.type==="lunch"?"12:00":"08:00",mealOpenRow(s.date,s.type),{cls:"honey",icon:MEAL.icon,t:MEALTYPES[s.type],open:true}])});
+  rows.sort((x,y)=>x[0].localeCompare(y[0]));return rows}
+function dayBlock(d,force){const t=today(),rows=dayRows(d);if(!force&&S.filter!=="all"&&!rows.length)return"";
+  return`<div class="day ${d===t?"is-today":""}" id="d-${d}"><div class="day-h"><div class="day-n"><small>DAY</small><b>${dayNum(d)}</b></div>
+   <div class="dt">${fmtDate(d,{weekday:"long",month:"short",day:"numeric"})}${d===t?" · Today":""}<span>${rows.length?rows.length+" on the schedule":"Nothing yet"}</span></div><div class="sp"></div>
+   <button class="btn soft sm" data-act="help" data-date="${d}">＋ Help this day</button></div>
+   <div class="stack">${rows.length?rows.map(r=>r[1]).join(""):`<div class="empty">Free day — <button class="linkbtn" data-act="help" data-date="${d}">sign up to help</button>${S.settings.meals.enabled?` or <button class="linkbtn" data-act="meal">bring a meal</button>`:""}</div>`}</div></div>`}
+function calendarGrid(){
+  const ds=days(),first=parse(ds[0]),last=parse(ds[39]),t=today();
+  const s0=new Date(first);s0.setDate(s0.getDate()-s0.getDay());const e0=new Date(last);e0.setDate(e0.getDate()+(6-e0.getDay()));
+  if(!S.sel||!inRange(S.sel))S.sel=inRange(t)?t:ds[0];
+  const m1=fmtDate(ds[0],{month:"long"}),m2=fmtDate(ds[39],{month:"long",year:"numeric"});
+  let cells="";
+  for(let d=new Date(s0);d<=e0;d.setDate(d.getDate()+1)){const k=ymd(d);
+    if(!inRange(k)){cells+=`<div class="cc out"><div class="cd"><b>${d.getDate()}</b></div></div>`;continue}
+    const rows=dayRows(k),max=3;
+    const pills=rows.slice(0,max).map(r=>{const p=r[2];return`<span class="pill ${p.pri?"pri":p.cls} ${p.open&&!p.pri?"open":""}">${p.pri?"★":p.icon}<span class="pt">${esc(p.t)}</span></span>`}).join("");
+    cells+=`<button class="cc ${k===t?"today":""} ${k<t?"past":""} ${k===S.sel?"sel":""}" data-act="selday" data-date="${k}">
+      <div class="cd"><b>${d.getDate()}</b><small>D${dayNum(k)}</small></div>${d.getDate()===1||k===ds[0]?`<span class="mon">${fmtDate(k,{month:"short"})}</span>`:""}
+      <div class="pills">${pills}</div>${rows.length>max?`<span class="more">+${rows.length-max} more</span>`:""}</button>`}
+  return`<div class="card cal"><div class="cal-top"><h3>${m1===m2.split(" ")[0]?m2:m1+" – "+m2}</h3><span class="small muted">Tap a day</span></div>
+   <div class="cal-dow">${["S","M","T","W","T","F","S"].map((x,i)=>`<div>${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][i]}</div>`).join("")}</div>
+   <div class="cal-grid">${cells}</div>
+   <div class="cal-legend"><span><i style="background:var(--honey-s)"></i>Meals${S.settings.kidName?" & "+esc(S.settings.kidName):""}</span><span><i style="background:var(--sage-s)"></i>Cleaning</span><span><i style="background:var(--sky-s)"></i>Laundry & errands</span><span><i style="background:var(--plum-s)"></i>Company</span><span><i style="box-shadow:inset 0 0 0 1.5px var(--muted);background:#fff"></i>Open</span><span><i style="background:var(--rose)"></i>${esc(mom)}'s priority</span></div></div>`}
+function dayMenu(d){
+  const t=today(),its=allItems().filter(i=>i.date===d).sort((a,b)=>(a.start||"").localeCompare(b.start||""));
+  const openNeeds=S.needs.filter(n=>n.date===d&&isOpen(n)&&!claimsFor(n).some(c=>c.uid===S.me.id)).sort((a,b)=>(b.priority?1:0)-(a.priority?1:0)||a.start.localeCompare(b.start));
+  const openMeals=mealSlots().filter(x=>x.date===d&&!mealFor(x.date,x.type));
+  let h=`<div class="dm-h"><div class="day-n"><small>DAY</small><b>${dayNum(d)}</b></div><div><h3>${fmtDate(d,{weekday:"long",month:"short",day:"numeric"})}</h3><p>${d===t?"Today · ":""}${its.length?its.length+" helping":"No one yet"}</p></div><button class="x" data-act="closepop" aria-label="Close">×</button></div>`;
+  if(openNeeds.length||openMeals.length){h+=`<div class="dm-sub">${esc(mom)} could use</div>`;
+    h+=openNeeds.map(n=>{const c=catInfo(n.cat);return`<div class="dm-open ${n.priority?"pri":""}"><span style="font-size:20px">${c.icon}</span><div class="tx"><b>${n.priority?"★ ":""}${esc(n.title||c.label)}</b><span>${fmtRange(n.start,n.dur)}</span></div><button class="btn ${n.priority?"primary":"soft"} sm" data-act="claim" data-id="${esc(n.id)}">I'll do it</button></div>`}).join("");
+    h+=openMeals.map(m=>`<div class="dm-open"><span style="font-size:20px">${MEAL.icon}</span><div class="tx"><b>${MEALTYPES[m.type]} needed</b><span>Meal train · ${esc(S.settings.meals.dropoff||"")}</span></div><button class="btn soft sm" data-act="meal" data-date="${d}" data-type="${m.type}">Bring it</button></div>`).join("")}
+  if(its.length){h+=`<div class="dm-sub">Already helping</div>`+its.map(i=>{const m=i.kind==="meal",c=m?MEAL:(catInfo(i.cat));
+    return`<div class="dm-line"><span>${c.icon}</span><span><b>${esc(nameOf(i.uid))}</b> · ${esc(m?(i.dish||MEALTYPES[i.mealType]):(i.title||c.label))}</span><span class="tm">${m?"~"+fmtTime(i.start||"17:00"):fmtTime(i.start)}</span></div>`}).join("")}
+  h+=`<div class="dm-sub">What would you like to do?</div><div class="tiles">`;
+  if(S.settings.meals.enabled&&openMeals.length)h+=`<button class="tile meal" data-act="meal" data-date="${d}" data-type="${openMeals[0].type}"><span class="ti">${MEAL.icon}</span>Bring a meal</button>`;
+  h+=Object.entries(CATS).map(([k,c])=>`<button class="tile" data-act="help" data-date="${d}" data-cat="${k}"><span class="ti">${c.icon}</span>${c.label}</button>`).join("")+`</div>`;
+  return h}
+function showDayMenu(d,anchor){showBubble(dayMenu(d),anchor)}
+function showBubble(html,anchor){
+  if(window.innerWidth<700||!anchor){openSheet(html.replace('data-act="closepop"','data-act="close"'));return}
+  closePop();const pop=$("#pop"),ar=$("#popArrow");pop.innerHTML=html;pop.classList.add("show");
+  const r=anchor.getBoundingClientRect(),W=pop.offsetWidth,H=pop.offsetHeight,vw=window.innerWidth,vh=window.innerHeight,gap=12;
+  let left=Math.min(Math.max(12,r.left+r.width/2-W/2),vw-W-12),below=r.bottom+gap+H<vh-12||r.top-gap-H<12;
+  let top=below?r.bottom+gap:r.top-gap-H;const want=top;top=Math.max(12,Math.min(top,vh-H-12));
+  if(top!==want){ // doesn't fit above/below: sit beside the day instead
+    const side=r.right+gap+W<vw-12?r.right+gap:r.left-gap-W;left=Math.max(12,side);top=Math.max(12,Math.min(r.top+r.height/2-H/2,vh-H-12));
+    const rightSide=side>r.left;ar.style.display="block";ar.style.left=(rightSide?r.right+gap-7:r.left-gap-9)+"px";ar.style.top=(r.top+r.height/2-8)+"px";
+    pop.style.left=left+"px";pop.style.top=top+"px";return}
+  pop.style.left=left+"px";pop.style.top=top+"px";
+  ar.style.display="block";ar.style.left=(r.left+r.width/2-8)+"px";ar.style.top=(below?r.bottom+gap-7:r.top-gap-9)+"px";
+}
+function closePop(){$("#pop").classList.remove("show");$("#popArrow").style.display="none"}
+window.addEventListener("scroll",()=>{if($("#pop").classList.contains("show"))closePop()},{passive:true});
+window.addEventListener("resize",closePop);
+function scheduleView(){
+  const t=today();
+  let h=`<section><div class="sec-h"><div class="seg"><button class="${S.view==="cal"?"on":""}" data-act="view" data-v="cal">Calendar</button><button class="${S.view==="list"?"on":""}" data-act="view" data-v="list">List</button></div><button class="btn primary sm" data-act="help">＋ Offer help</button></div>
+   <div class="chips">${FILTERS.map(([k,l])=>`<button class="chip ${S.filter===k?"on":""}" data-act="filter" data-f="${k}">${l}</button>`).join("")}</div></section>`;
+  if(S.view==="cal")return h+`<section style="margin-top:12px">${calendarGrid()}</section>`+dayBlock(S.sel,true);
+  if(days()[0]<t)h+=`<div class="mt"><button class="linkbtn" data-act="past">${S.showPast?"Hide past days":"Show past days"}</button></div>`;
+  const ds=S.showPast?days():days().filter(d=>d>=t);const list=ds.length?ds:days();
+  const out=list.map(d=>dayBlock(d)).join("");
+  return h+(out||`<div class="empty mt">Nothing matches that filter yet.</div>`)}
+function gridShell(cellFn,cls,hint,legend){
+  const ds=days(),first=parse(ds[0]),last=parse(ds[39]);
+  const s0=new Date(first);s0.setDate(s0.getDate()-s0.getDay());const e0=new Date(last);e0.setDate(e0.getDate()+(6-e0.getDay()));
+  const m1=fmtDate(ds[0],{month:"long"}),m2=fmtDate(ds[39],{month:"long",year:"numeric"});let cells="";
+  for(let d=new Date(s0);d<=e0;d.setDate(d.getDate()+1)){const k=ymd(d);
+    cells+=inRange(k)?cellFn(k,d.getDate()===1||k===ds[0]?`<span class="mon">${fmtDate(k,{month:"short"})}</span>`:""):`<div class="cc out"><div class="cd"><b>${d.getDate()}</b></div></div>`}
+  return`<div class="card cal ${cls}"><div class="cal-top"><h3>${m1===m2.split(" ")[0]?m2:m1+" – "+m2}</h3><span class="small muted">${hint}</span></div>
+   <div class="cal-dow">${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(x=>`<div>${x}</div>`).join("")}</div><div class="cal-grid">${cells}</div>${legend||""}</div>`}
+function myGrid(){
+  const t=today(),its=myAll();
+  return gridShell((k,mon)=>{const mi=its.filter(i=>i.date===k).sort((a,b)=>(a.start||"").localeCompare(b.start||""));
+    const pills=mi.slice(0,3).map(i=>{const m=i.kind==="meal",c=m?MEAL:(catInfo(i.cat));return`<span class="pill ${c.color}">${c.icon}<span class="pt">${m?"~"+fmtTime(i.start||"17:00"):fmtTime(i.start)}</span></span>`}).join("");
+    return`<button class="cc ${k===t?"today":""} ${k<t?"past":""} ${mi.length?"mine":""}" data-act="myday" data-date="${k}"><div class="cd"><b>${parse(k).getDate()}</b><small>D${dayNum(k)}</small></div>${mon}<div class="pills">${pills}</div>${mi.length>3?`<span class="more">+${mi.length-3}</span>`:""}</button>`},
+   "mycal","Tap any day",`<div class="cal-legend"><span><i style="background:#fff;box-shadow:inset 0 0 0 2px var(--rose)"></i>Days you're helping</span></div>`)}
+function myDayMenu(d){
+  const mi=myAll().filter(i=>i.date===d).sort((a,b)=>(a.start||"").localeCompare(b.start||""));
+  if(!mi.length)return dayMenu(d);
+  let h=`<div class="dm-h"><div class="day-n"><small>DAY</small><b>${dayNum(d)}</b></div><div><h3>${fmtDate(d,{weekday:"long",month:"short",day:"numeric"})}</h3><p>You're helping ${mi.length===1?"once":mi.length+" times"}</p></div><button class="x" data-act="closepop" aria-label="Close">×</button></div>`;
+  h+=mi.map(i=>{const m=i.kind==="meal",c=m?MEAL:(catInfo(i.cat));
+    return`<div class="dm-open" style="border-style:solid;flex-wrap:wrap"><span style="font-size:20px">${c.icon}</span><div class="tx"><b>${esc(m?`${MEALTYPES[i.mealType]}: ${i.dish||"a meal"}`:(i.title||c.label))}</b><span>${m?"Drop-off ~"+fmtTime(i.start||"17:00"):fmtRange(i.start,i.dur)}</span></div>${d>=today()?`<button class="btn ghost sm" data-act="cancel" data-id="${esc(i.id)}">Cancel</button>`:""}<div style="width:100%;margin-top:8px">${calLinks(i)}</div></div>`}).join("");
+  if(d>=today())h+=`<div class="dm-foot"><button class="btn soft sm" data-act="anotherday" data-date="${d}">＋ Add something else this day</button></div>`;
+  return h}
+function mealGrid(){
+  const ds=days(),first=parse(ds[0]),last=parse(ds[39]),t=today();
+  const s0=new Date(first);s0.setDate(s0.getDate()-s0.getDay());const e0=new Date(last);e0.setDate(e0.getDate()+(6-e0.getDay()));
+  const m1=fmtDate(ds[0],{month:"long"}),m2=fmtDate(ds[39],{month:"long",year:"numeric"});
+  const slots=mealSlots();let cells="";
+  for(let d=new Date(s0);d<=e0;d.setDate(d.getDate()+1)){const k=ymd(d);
+    if(!inRange(k)){cells+=`<div class="cc out"><div class="cd"><b>${d.getDate()}</b></div></div>`;continue}
+    const sl=slots.filter(x=>x.date===k);const all=sl.length&&sl.every(x=>mealFor(x.date,x.type));
+    const pills=sl.map(x=>{const it=mealFor(x.date,x.type);return it?`<span class="pill honey"><span class="pe">${MEAL.icon}</span><span class="pt">${esc(it.dish||MEALTYPES[x.type])}</span></span>`:`<span class="pill sage open"><span class="pe">＋</span><span class="pt">${sl.length>1?MEALTYPES[x.type]:"Open"}</span></span>`}).join("");
+    cells+=`<button class="cc ${k===t?"today":""} ${k<t?"past":""} ${sl.length?"":"nomeal"} ${all?"mfull":""}" data-act="mealday" data-date="${k}">
+      <div class="cd"><b>${d.getDate()}</b><small>D${dayNum(k)}</small></div>${d.getDate()===1||k===ds[0]?`<span class="mon">${fmtDate(k,{month:"short"})}</span>`:""}
+      ${sl.length?`<div class="pills">${pills}</div>`:`<span class="nm">—</span>`}</button>`}
+  return`<div class="card cal mcal"><div class="cal-top"><h3>${m1===m2.split(" ")[0]?m2:m1+" – "+m2}</h3><span class="small muted">Tap an open day</span></div>
+   <div class="cal-dow">${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(x=>`<div>${x}</div>`).join("")}</div>
+   <div class="cal-grid">${cells}</div>
+   <div class="cal-legend"><span><i style="background:var(--honey-s)"></i>Meal coming</span><span><i style="box-shadow:inset 0 0 0 1.5px var(--sage);background:#fff"></i>Open — needs a meal</span>${(+S.settings.meals.every||1)>1?`<span><i style="border:1px dashed var(--line2)"></i>No meal needed</span>`:""}</div></div>`}
+function mealMenu(d){
+  const sl=mealSlots().filter(x=>x.date===d);
+  let h=`<div class="dm-h"><div class="day-n"><small>DAY</small><b>${dayNum(d)}</b></div><div><h3>${fmtDate(d,{weekday:"long",month:"short",day:"numeric"})}</h3><p>${d===today()?"Today · ":""}Meal train</p></div><button class="x" data-act="closepop" aria-label="Close">×</button></div>`;
+  if(!sl.length)return h+`<div class="empty">No meal needed this day — the meal train is set to every ${+S.settings.meals.every===2?"other":"third"} day.</div>`;
+  h+=sl.map(x=>{const it=mealFor(x.date,x.type);
+    if(it)return`<div class="dm-line"><span>${MEAL.icon}</span><span><b>${esc(nameOf(it.uid))}</b> · ${esc(it.dish||MEALTYPES[x.type])}${it.note?`<br><span class="small muted">${esc(it.note)}</span>`:""}</span><span class="tm">${MEALTYPES[x.type]} ~${fmtTime(it.start||"17:00")}</span></div>`;
+    return`<div class="dm-open"><span style="font-size:20px">${MEAL.icon}</span><div class="tx"><b>${MEALTYPES[x.type]} needed</b><span>${esc(S.settings.meals.dropoff||"")}</span></div><button class="btn primary sm" data-act="meal" data-date="${d}" data-type="${x.type}">Bring it</button></div>`}).join("");
+  const m=S.settings.meals;
+  if(m.allergies)h+=`<div class="note alert mt"><h4>⚠️ Allergies</h4><p>${esc(m.allergies)}</p></div>`;
+  return h}
+function mealsView(){
+  const m=S.settings.meals,t=today();
+  if(!m.enabled)return`<section><div class="card"><h2>Meal train is paused</h2><p class="muted">${esc(mom)} hasn't turned the meal train on yet.</p></div></section>`;
+  const slots=mealSlots(),covered=slots.filter(s=>mealFor(s.date,s.type)).length;
+  const shown=S.showPastMeals?slots:slots.filter(s=>s.date>=t);
+  const dishes=allItems().filter(i=>i.kind==="meal"&&i.dish).sort((a,b)=>a.date.localeCompare(b.date));
+  const note=(k,title,cls="")=>m[k]?`<div class="note ${cls}"><h4>${title}</h4><p>${esc(m[k])}</p></div>`:"";
+  let h=`<section><div class="card"><div class="sec-h" style="margin:0 0 14px"><h2>🥘 Meal Train</h2><button class="btn primary sm" data-act="meal">Bring a meal</button></div>
+   <div class="mealstat"><b>${covered}<span class="muted" style="font-size:20px">/${slots.length}</span></b><div style="flex:1"><div class="small muted" style="margin-bottom:6px">${slots.length?Math.round(covered/slots.length*100):0}% of ${(m.types||[]).map(x=>MEALTYPES[x].toLowerCase()).join(" & ")||"meals"} covered${(+m.every||1)>1?` · every ${+m.every===2?"other":"third"} day`:""}</div><div class="bar"><i style="width:${slots.length?covered/slots.length*100:0}%"></i></div></div></div>
+   <div class="notes">${note("household","👨‍👩‍👧 Feeding")}${note("dropoff","🕔 Drop-off time")}${note("allergies","⚠️ Allergies & must-avoid","alert")}${note("loves","💛 We love")}${note("avoid","🙅 Not for us")}${note("instructions","🚪 How to drop off")}</div></div></section>`;
+  if(dishes.length)h+=`<section><div class="sec-h"><h2>On the menu so far</h2><span class="aside">Helps avoid repeats</span></div><div>${dishes.map(i=>`<span class="dish">${esc(i.dish)}</span>`).join("")}</div></section>`;
+  const seg=`<div class="seg"><button class="${S.mview==="cal"?"on":""}" data-act="mview" data-v="cal">Calendar</button><button class="${S.mview==="list"?"on":""}" data-act="mview" data-v="list">List</button></div>`;
+  if(S.mview==="cal")return h+`<section><div class="sec-h"><h2>Pick a day</h2>${seg}</div>${mealGrid()}</section>`;
+  h+=`<section><div class="sec-h"><h2>Pick a day</h2>${seg}</div>${slots.some(s=>s.date<t)?`<div style="margin:-4px 2px 10px"><button class="linkbtn" data-act="pastmeals">${S.showPastMeals?"Hide past":"Show past"}</button></div>`:""}<div class="stack">`;
+  for(const s of shown){const it=mealFor(s.date,s.type);const n=dayNum(s.date);
+    const lead=`<div class="day-n" style="margin-right:2px"><small>DAY</small><b>${n}</b></div>`;
+    if(it)h+=`<div class="row">${lead}<div class="rb"><div class="rt">${esc(it.dish||"A homemade meal")}</div><div class="rm">${fmtDate(s.date)} · ${MEALTYPES[s.type]} · ${it.uid===S.me.id?'<span class="you">You</span>':`<span class="who">${esc(nameOf(it.uid))}</span>`} · ~${fmtTime(it.start||"17:00")}</div>${it.note?`<div class="rn">${esc(it.note)}</div>`:""}</div><div class="ra"><span class="badge ok">Covered</span></div></div>`;
+    else h+=`<div class="row open">${lead}<div class="rb"><div class="rt">${MEALTYPES[s.type]} needed</div><div class="rm">${fmtDate(s.date,{weekday:"long",month:"short",day:"numeric"})}${s.date===t?" · Today":""}</div></div><div class="ra"><button class="btn soft sm" data-act="meal" data-date="${s.date}" data-type="${s.type}">Bring it</button></div></div>`}
+  if(!shown.length)h+=`<div class="empty">No meal days left — the 40 days are complete.</div>`;
+  return h+`</div></section>`}
+function mineView(){
+  const me=mine(),t=today();const items=myAll().sort((a,b)=>(a.date+(a.start||"")).localeCompare(b.date+(b.start||"")));
+  const up=items.filter(i=>i.date>=t),past=items.filter(i=>i.date<t);
+  let h="";const names=knownNames();
+  if(!normName(me.name)&&names.length)h+=`<section><div class="card" style="background:linear-gradient(160deg,#fff,#FFF5F0)"><b>Signed up before?</b><p class="small muted" style="margin:4px 0 10px">If you signed up on another phone, or in Safari instead of the Home Screen icon, tap your name to bring your shifts back.</p><div class="namechips">${names.map(n=>`<button class="dish" data-act="iam" data-name="${esc(n)}">${esc(n)}</button>`).join("")}</div></div></section>`;
+  h+=`<section><div class="sec-h"><h2>My shifts</h2>${up.length?`<button class="linkbtn" data-act="copyall">Copy all</button>`:""}</div>
+  ${up.length?`<div style="margin-bottom:10px">${myCalCard()}</div>`:""}<div class="stack">`;
+  if(!up.length)h+=`<div class="empty">You haven't signed up for anything yet. <button class="linkbtn" data-act="help">Offer help</button> or <button class="linkbtn" data-act="meal">bring a meal</button>.</div>`;
+  for(const i of up)h+=`<div class="card" style="padding:14px">${itemRow(i,{showDate:true,flat:true,actions:`<div class="ra"><button class="btn ghost sm" data-act="cancel" data-id="${esc(i.id)}">Cancel</button></div>`})}<div class="mt">${calLinks(i)}</div></div>`;
+  h+=`</div></section>`;
+  h+=`<section><div class="sec-h"><h2>My calendar</h2><span class="aside">${up.length} upcoming</span></div>${myGrid()}</section>`;
+  if(past.length)h+=`<section><div class="sec-h"><h2>Thank you for these</h2><span class="aside">${past.length} done</span></div><div class="stack">${past.map(i=>itemRow(i,{showDate:true})).join("")}</div></section>`;
+  h+=installCard(false);
+  h+=accountCard();
+  h+=`<section><div class="card"><div class="admin-h"><h3>About you</h3></div>
+   <form novalidate data-form="profile" class="form"><div class="two"><div class="field"><label class="lbl">Your name</label><input name="pname" required value="${esc(me.name||S.me.name||"")}" placeholder="How ${esc(mom)} knows you"></div>
+   <div class="field"><label class="lbl">Phone <span class="opt">optional</span></label><input name="pphone" type="tel" value="${esc(me.phone||"")}" placeholder="So ${esc(mom)} can text you"></div></div>
+   <div><button class="btn ghost" type="submit">Save</button></div></form></div></section>`;
+  return h}
+const APP_VER="multi-family preview · Nov 23";
+function accountCard(){return accountCard0()+`<p class="small muted" style="text-align:center;margin:6px 0 0">App version ${APP_VER}${S.authUser?(S.authUser.isAnonymous?" · guest":" · "+esc((S.authUser.email||((S.authUser.providerData||[]).find(x=>x&&x.email)||{}).email||"no email")))+(S.isAdmin?" · manager":""):" · not connected"}</p>`}
+function accountCard0(){const u=S.authUser;
+  if(u&&!u.isAnonymous)return`<section><div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Signed in</b><div class="small muted">${esc(u.email||"")}${S.isAdmin?" · can manage this page":""}</div></div><button class="btn ghost sm" data-act="signout">Sign out</button><button class="btn ghost sm" data-act="delacct">Delete account</button>${!u.emailVerified&&S.isAdmin?`<div class="banner warn" style="margin:12px 0 0"><span>✉️</span><div>Confirm your email to manage this page. <button class="linkbtn" data-act="verify">Send the email</button> · <button class="linkbtn" data-act="reloaduser">I've confirmed it</button></div></div>`:""}<details class="other-ways" style="width:100%"><summary>Set or change your password</summary><form novalidate data-form="setpw" class="form" style="margin-top:10px"><div class="field"><input name="pw" type="password" required minlength="6" autocomplete="new-password" placeholder="New password (6+ characters)"></div><button class="btn ghost sm" type="submit">Save password</button></form></details></div></section>`;
+  return`<section><div class="card"><div class="admin-h"><h3>Sign in or create an account</h3></div>
+   <p class="small muted" style="margin:-6px 0 12px">Optional. Your email and a password keep your sign-ups with you on any phone, in Safari or the Home Screen app. New here? Just pick a password and we'll make your account.</p>
+   ${pwForm()}
+   <details class="other-ways"><summary>Other ways to sign in</summary>
+   <div class="calrow" style="margin-top:10px"><button class="btn ghost sm" data-act="apple">Apple</button><button class="btn ghost sm" data-act="google">Google</button><button class="btn ghost sm" data-act="emaillink">Email me a link</button><button class="btn ghost sm" data-act="pastelink">Paste link</button></div></details></div></section>${S.people[S.me.id]?`<p class="small muted" style="text-align:center"><button class="linkbtn small" data-act="delacct">Remove my info from this page</button></p>`:""}`}
+function pwForm(){return`<form novalidate data-form="pw" class="form">
+   <div class="field"><label class="lbl">Email</label><input name="email" type="email" required autocomplete="username" placeholder="you@example.com" value="${esc(lsGet2("f40-email"))}"></div>
+   <div class="field"><label class="lbl">Password <span class="opt">6 or more characters</span></label><input name="pw" type="password" required minlength="6" autocomplete="current-password"></div>
+   <button class="btn primary block" type="submit">Continue</button>
+   <div style="text-align:center"><button type="button" class="linkbtn small" data-act="forgotpw">Forgot password?</button></div></form>`}
+function accountSheet(){openSheet(sheetHead("Keep your sign-ups everywhere","Use your email and a password. New here? Just pick one.")+pwForm())}
+const lsGet2=k=>{try{return localStorage.getItem(k)||""}catch(_){return""}};
+function manageView(){
+  if(!S.isAdmin)return`<div class="empty">This page is just for the family.</div>`;
+  const st=S.settings,m=st.meals,t=today();
+  const needs=S.needs.slice().sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start)).filter(n=>n.date>=t||S.showPast);
+  const signups=allItems().sort((a,b)=>(a.date+(a.start||"")).localeCompare(b.date+(b.start||""))).filter(i=>i.date>=t);
+  const def=upcomingDays()[0];
+  let h=`<section><div class="card" style="background:linear-gradient(160deg,#fff,#FFF5F0)"><h2>Hi ${esc(mom)} 💛</h2><p class="muted" style="margin:6px 0 0">Ask for what you need. Mark the things that matter most as <b>priority</b> and they'll show up first for everyone.</p></div></section>`+shareCard();
+  h+=`<section><div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>📅 Family calendar for home</b><div class="small muted">Every helper, meal and open request in one file for Apple Calendar. Download again anytime to update.</div></div><button class="btn primary sm" data-act="icsfamily">${ICON_A} Download for Apple Calendar</button></div></section>`;
+  // add request
+  h+=`<section><div class="card"><div class="admin-h"><span class="n">1</span><h3>Ask for help</h3></div>
+   <form novalidate data-form="need" class="form">
+    <div class="catgrid">${Object.entries(CATS).map(([k,c],ix)=>`<label class="catopt"><input type="radio" name="cat" value="${k}" ${ix===0?"checked":""}><span class="ci">${c.icon}</span><span class="cl">${c.label}</span></label>`).join("")}</div>
+    <div class="field"><label class="lbl">What exactly? <span class="opt">optional</span></label><input name="title" placeholder="e.g. Hold the baby so I can nap"></div>
+    <div class="two"><div class="field"><label class="lbl">Starting</label>${allDaySelect("date",def)}</div><div class="field"><label class="lbl">Repeat</label><select name="repeat"><option value="once">Just this day</option><option value="daily">Every day</option><option value="alt">Every other day</option><option value="weekdays">Weekdays</option><option value="weekly">Once a week</option></select></div></div>
+    <div class="two"><div class="field"><label class="lbl">Start time</label>${timeSelect("start","10:00")}</div><div class="field"><label class="lbl">Until <span class="opt">for repeats</span></label>${allDaySelect("until",days()[39])}</div></div>
+    <div><label class="lbl">How long?</label>${durChips("dur",120)}</div>
+    <div class="two"><div class="field"><label class="lbl">Helpers needed</label><select name="spots"><option>1</option><option>2</option><option>3</option></select></div><div></div></div>
+    <label class="toggle pri"><input type="checkbox" name="priority"><div><b>★ High priority</b><small>Pinned to the top for everyone</small></div></label>
+    <div class="field"><label class="lbl">Note for helpers <span class="opt">optional</span></label><textarea name="note" rows="2" placeholder="Where things are, what would be ideal…"></textarea></div>
+    <button class="btn primary block" type="submit">Post request</button></form></div></section>`;
+  // requests list
+  h+=`<section><div class="sec-h"><h2>Your requests</h2><span class="aside">${needs.filter(isOpen).length} open</span></div><div class="stack">`+
+   (needs.length?needs.map(n=>{const c=catInfo(n.cat);const cl=claimsFor(n);return`<div class="row c-${c.color} ${n.priority?"pri":""}"><div class="ico">${c.icon}</div><div class="rb"><div class="rt">${esc(n.title||c.label)}</div><div class="rm">${fmtDate(n.date)} · ${fmtRange(n.start,n.dur)} · ${cl.length?cl.map(x=>esc(nameOf(x.uid))).join(", "):"open"}</div></div>
+    <div class="ra"><button class="iconbtn ${n.priority?"on":""}" data-act="pri" data-id="${esc(n.id)}" title="Toggle priority">★</button><button class="iconbtn" data-act="delneed" data-id="${esc(n.id)}" title="Remove">🗑</button></div></div>`}).join(""):`<div class="empty">No requests yet. Add one above.</div>`)+`</div></section>`;
+  // dates & family
+  h+=`<section><div class="card"><div class="admin-h"><span class="n">2</span><h3>Dates & family</h3></div>
+   <form novalidate data-form="settings" class="form">
+    <div class="two"><div class="field"><label class="lbl">Baby's arrival (or due) date</label><input type="date" name="startDate" value="${esc(st.startDate)}"></div><div class="field"><label class="lbl">Baby's name <span class="opt">optional</span></label><input name="babyName" value="${esc(st.babyName)}" placeholder="When you're ready to share"></div></div>
+    <div class="field"><label class="lbl">How to say when baby is due <span class="opt">optional · e.g. around Christmas</span></label><input name="dueText" maxlength="60" value="${esc(st.dueText||"")}" placeholder="around Christmas"><small class="small muted" style="display:block;margin-top:6px">If you fill this in, helpers see these words instead of the exact date and a countdown. The date above still sets up the calendar.</small></div>
+    <label class="toggle"><input type="checkbox" name="born" ${st.born?"checked":""}><div><b>Baby has arrived</b><small>Day 1 is the birthday — the 40 days count from there</small></div></label>
+    <div class="two"><div class="field"><label class="lbl">New mom's first name</label><input name="momName" required maxlength="40" value="${esc(st.momName)}"></div><div class="field"><label class="lbl">Partner <span class="opt">optional</span></label><input name="partnerName" maxlength="40" value="${esc(st.partnerName)}"></div></div>
+    <div class="field"><label class="lbl">Big brothers or sisters <span class="opt">optional</span></label><input name="kidName" maxlength="60" value="${esc(st.kidName)}" placeholder="e.g. Theo, or Theo & Ava"></div>
+    <div class="field"><label class="lbl">Family line under the title</label><input name="family" value="${esc(st.family)}"></div>
+    <div class="field"><label class="lbl">Welcome message</label><textarea name="welcome" rows="2" placeholder="A note to everyone helping">${esc(st.welcome)}</textarea></div>
+    <div class="field"><label class="lbl">Address <span class="opt">shown to helpers & added to calendar invites</span></label><input name="address" value="${esc(st.address)}"></div>
+    <div class="field"><label class="lbl">Before-you-visit notes <span class="opt">one per line</span></label><textarea name="visitNotes" rows="4">${esc(st.visitNotes)}</textarea></div>
+    ${st.kidName?`<div class="field"><label class="lbl">🧸 ${esc(st.kidName)}'s routine</label><textarea name="kidNotes" rows="3" placeholder="Nap times, favorite snacks, favorite park, bedtime…">${esc(st.kidNotes)}</textarea></div>`:""}
+    <button class="btn primary block" type="submit">Save</button></form></div></section>`;
+  // meals settings
+  h+=`<section><div class="card"><div class="admin-h"><span class="n">3</span><h3>Meal train</h3></div>
+   <form novalidate data-form="meals" class="form">
+    <label class="toggle"><input type="checkbox" name="enabled" ${m.enabled?"checked":""}><div><b>Meal train is on</b><small>People can sign up to bring meals</small></div></label>
+    <div><label class="lbl">Which meals?</label><div class="durs">${Object.entries(MEALTYPES).map(([k,l])=>`<label><input type="checkbox" name="types" value="${k}" ${(m.types||[]).includes(k)?"checked":""}><span>${l}</span></label>`).join("")}</div></div>
+    <div class="two"><div class="field"><label class="lbl">How often?</label><select name="every"><option value="1" ${+m.every===1?"selected":""}>Every day</option><option value="2" ${+m.every===2?"selected":""}>Every other day</option><option value="3" ${+m.every===3?"selected":""}>Every third day</option></select></div>
+    <div class="field"><label class="lbl">Drop-off window</label><input name="dropoff" value="${esc(m.dropoff)}"></div></div>
+    <div class="field"><label class="lbl">Who's eating</label><input name="household" value="${esc(m.household)}"></div>
+    <div class="field"><label class="lbl">⚠️ Allergies & must-avoid</label><input name="allergies" value="${esc(m.allergies)}" placeholder="e.g. no shellfish"></div>
+    <div class="two"><div class="field"><label class="lbl">💛 We love</label><textarea name="loves" rows="2">${esc(m.loves)}</textarea></div><div class="field"><label class="lbl">🙅 Not for us</label><textarea name="avoid" rows="2">${esc(m.avoid)}</textarea></div></div>
+    <div class="field"><label class="lbl">How to drop off</label><textarea name="instructions" rows="2">${esc(m.instructions)}</textarea></div>
+    <button class="btn primary block" type="submit">Save meal train</button></form></div></section>`;
+  // admins
+  h+=`<section><div class="card"><div class="admin-h"><span class="n">4</span><h3>Who can manage this</h3></div>
+   <p class="small muted" style="margin:-6px 0 10px">Add someone's email (your partner, a sister, your doula) and they'll get this tab after signing in with that email.</p>
+   <div class="stack"><div class="row" style="padding:10px 12px"><div class="rb"><div class="rt" style="font-size:14.5px">${S.isOwner?esc(signedInEmail(S.authUser)||"You"):"The person who started this page"}</div></div><span class="badge ok">Owner</span></div>
+   ${S.admins.filter(e=>!(S.isOwner&&e===signedInEmail(S.authUser))).map(e=>`<div class="row" style="padding:10px 12px"><div class="rb"><div class="rt" style="font-size:14.5px">${esc(e)}</div></div><button class="iconbtn" data-act="rmadmin" data-email="${esc(e)}" title="Remove">🗑</button></div>`).join("")}</div>
+   <form novalidate data-form="admin" class="form" style="margin-top:12px;flex-direction:row;gap:8px"><div class="field" style="flex:1"><input name="email" type="email" required placeholder="name@example.com"></div><button class="btn primary" type="submit">Add</button></form></div></section>`;
+  // everyone's signups
+  h+=`<section><div class="sec-h"><h2>Everyone signed up</h2><span class="aside">${signups.length} upcoming</span></div><div class="stack">`+
+   (signups.length?signups.map(i=>{const p={phone:(S.contacts[i.uid]||{}).phone};return itemRow(i,{showDate:true,actions:`<div class="ra">${p.phone?`<span class="small muted">${esc(p.phone)}</span>`:""}<button class="iconbtn" data-act="rmitem" data-id="${esc(i.id)}" data-uid="${esc(i.uid)}" title="Remove">🗑</button></div>`})}).join(""):`<div class="empty">No sign-ups yet.</div>`)+`</div></section>`;
+  h+=dangerCard();
+  return h}
+
+function prepSignups(k){const t=today();return allItems().filter(i=>i.kind==="prep"&&i.cat===k&&i.date>=t).sort((a,b)=>(a.date+(a.start||"")).localeCompare(b.date+(b.start||"")))}
+function prepCard(k){const c=PREP[k],st=S.settings,ups=prepSignups(k);
+  let h=`<section><div class="card prep c-${c.color}"><div class="prep-h"><div class="ico">${c.icon}</div><div><h2>${esc(c.label)}</h2><div class="prep-meta">${c.meta.map(esc).join(" · ")}</div></div></div>
+   <div class="prep-opts">${c.opts.map(o=>`<button class="prep-opt" data-act="prep" data-k="${k}" data-o="${o.k}"><b>${esc(o.t)}.</b> ${esc(o.d)}<span class="go">Sign up ›</span></button>`).join("")}</div>`;
+  if(c.ideas)h+=`<div class="ideas"><h4>What you could bring</h4>${c.ideas.map(([g,xs])=>`<div class="idea-g"><small>${esc(g)}</small><div>${xs.map(x=>`<span class="dish">${esc(x)}</span>`).join("")}</div></div>`).join("")}<p class="small muted" style="margin:10px 0 0">${esc(c.tip)}</p></div>`;
+  if(c.foot)h+=`<div class="note mt"><p>${esc(c.foot)}</p></div>`;
+  if(c.allergy&&st.meals.allergies)h+=`<div class="note alert mt"><h4>⚠️ Food allergies</h4><p>${esc(st.meals.allergies)}</p></div>`;
+  if(ups.length)h+=`<div class="prep-who"><small>Signed up</small>${ups.map(i=>`<div>${fmtDate(i.date)} · ${fmtTime(i.start)} · <span class="${i.uid===S.me.id?"you":"who"}">${esc(nameOf(i.uid))}</span> — ${esc(i.title||"")}${i.dish?` (${esc(i.dish)})`:""}</div>`).join("")}</div>`;
+  h+=`<div style="margin-top:14px"><button class="btn primary block" data-act="prep" data-k="${k}">Sign up for this</button></div></div></section>`;
+  return h}
+function prepView(){
+  let h=`<section><div class="card" style="background:linear-gradient(160deg,#fff,#FFF5F0)"><h2>${esc(PREP_INTRO.title)}</h2><p class="muted" style="margin:8px 0 14px">${esc(PREP_INTRO.text)}</p>
+   <div class="prep-jump">${Object.entries(PREP).map(([k,c])=>`<button class="tile" data-act="prepjump" data-k="${k}"><span class="ti">${c.icon}</span>${esc(c.short||c.label)}</button>`).join("")}</div></div></section>`;
+  for(const k in PREP)h+=`<div id="prep-${k}">${prepCard(k)}</div>`;
+  h+=`<section><div class="card"><h3 style="margin:0 0 6px">Something else in mind?</h3><p class="small muted" style="margin:0 0 12px">${esc(PREP_NOTE.ph)}</p><button class="btn ghost block" data-act="prep" data-k="mama" data-o="" data-free="1">Tell us your idea</button></div></section>`;
+  return h}
+function prepSheet(k,o,free){
+  if(!guardWrite())return;const c=PREP[k];if(!c)return;const st=S.settings;
+  const sel=c.opts.find(x=>x.k===o)||(free?null:c.opts[0]);
+  const t=today(),tm=addDays(t,1);
+  openSheet(sheetHead(`${c.icon} ${esc(free?"Your own idea":c.label)}`,free?"Tell us what you’re good at and when you could come.":esc(c.meta.join(" · ")))+
+  `<form novalidate data-form="prep" class="form"><input type="hidden" name="k" value="${k}">
+   ${free?`<input type="hidden" name="opt" value="idea">`:`<div class="prep-pick">${c.opts.map(x=>`<label class="pp"><input type="radio" name="opt" value="${x.k}" data-dur="${x.dur||c.dur}" ${sel&&x.k===sel.k?"checked":""}><span><b>${esc(x.t)}</b><small>${esc(x.d)}</small></span></label>`).join("")}</div>`}
+   ${c.dish&&!free?`<div class="field"><label class="lbl">What are you making? <span class="opt">optional</span></label><input name="dish" maxlength="80" placeholder="e.g. Beef and vegetable stew"><div class="idea-chips">${c.ideas.flatMap(g=>g[1]).map(x=>`<button type="button" class="dish" data-act="pickdish" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>`:""}
+   <div class="two"><div class="field"><label class="lbl">Day</label><input type="date" name="date" required min="${t}" value="${tm}"></div><div class="field"><label class="lbl">Start time</label>${timeSelect("start",c.start||"10:00")}</div></div>
+   <div><label class="lbl">For how long?</label>${durChips("dur",(sel&&sel.dur)||c.dur)}</div>
+   <div class="field"><label class="lbl">${esc(PREP_NOTE.lbl)} <span class="opt">${free?"":"optional"}</span></label><textarea name="note" rows="3" maxlength="500" ${free?"required":""} placeholder="${esc(free?PREP_NOTE.ph:"Anything we should know")}"></textarea></div>
+   ${c.allergy&&st.meals.allergies&&!free?`<div class="note alert"><h4>⚠️ If you’re cooking or bringing snacks</h4><p>${esc(st.meals.allergies)}</p></div>`:""}
+   ${nameFields()}
+   <button class="btn primary block" type="submit">Sign me up</button></form>`)}
+function render(){
+  renderTabs();renderBanners();
+  $("#familyLine").textContent=S.settings.family||(S.fid?`A circle of care for ${mom} & family`:"A circle of care for the first 40 days");$("#footLine").textContent=S.fid?`Made with love for ${mom} & family.`:"Made with love for new families.";
+  document.body.classList.toggle("landing",!S.fid);
+  if(!S.fid){$("#main").innerHTML=S.live?landingView():`<div class="loading"><div class="spin"></div>Loading…</div>`;return}
+  if(S.missing){$("#main").innerHTML=`<section><div class="card"><h2>We couldn't find that page</h2><p class="muted">The link may be mistyped, or the family may have taken their page down. Ask whoever sent it for the link again.</p><div class="cta"><button class="btn ghost" data-act="landing">Go to the start</button></div></div></section>`;return}
+  if(S.live&&!(S.loaded.s&&S.loaded.n&&S.loaded.p&&S.loaded.f)&&!S.stale){$("#main").innerHTML=`<div class="loading"><div class="spin"></div>Gathering the schedule…</div>`;return}
+  if(S.live&&S.loaded.p)checkFeed();
+  const v={home:homeView,prep:prepView,schedule:scheduleView,meals:mealsView,mine:mineView,manage:manageView}[S.tab]||homeView;
+  $("#main").innerHTML=v();
+}
+
+/* ---------- sheets ---------- */
+function helpSheet(date,cat){
+  if(!guardWrite())return;
+  openSheet(sheetHead("Offer a helping hand","Pick what you'd like to do and when. You'll be able to add it to your calendar.")+
+  `<form novalidate data-form="help" class="form">
+   <div class="catgrid">${Object.entries(CATS).map(([k,c])=>`<label class="catopt"><input type="radio" name="cat" value="${k}" ${k===(cat||Object.keys(CATS)[0])?"checked":""}><span class="ci">${c.icon}</span><span class="cl">${c.label}</span><span class="ch">${c.hint}</span></label>`).join("")}</div>
+   <div class="field"><label class="lbl">In a few words <span class="opt">optional</span></label><input name="title" maxlength="80" placeholder="e.g. Playground + lunch"></div>
+   <div class="two"><div class="field"><label class="lbl">Day</label>${daySelect("date",date)}</div><div class="field"><label class="lbl">Start time</label>${timeSelect("start","10:00")}</div></div>
+   <div><label class="lbl">For how long?</label>${durChips("dur",120)}</div>
+   <div class="field"><label class="lbl">Note for ${esc(mom)} <span class="opt">optional</span></label><textarea name="note" rows="2" maxlength="400" placeholder="Anything she should know"></textarea></div>
+   ${S.settings.meals.allergies?`<div class="note alert"><h4>⚠️ If you're cooking or bringing snacks</h4><p>${esc(S.settings.meals.allergies)}</p></div>`:""}
+   ${nameFields()}
+   <button class="btn primary block" type="submit">Sign me up</button></form>`)}
+function claimSheet(id){
+  if(!guardWrite())return;const n=S.needs.find(x=>x.id===id);if(!n)return;const c=catInfo(n.cat);
+  openSheet(sheetHead(`${c.icon} ${esc(n.title||c.label)}`,`${fmtDate(n.date,{weekday:"long",month:"long",day:"numeric"})} · ${fmtRange(n.start,n.dur)}`)+
+  (n.priority?`<div class="banner" style="background:var(--rose-s);color:var(--rose-d);margin:0 0 14px"><span>★</span><div>This is one of ${esc(mom)}'s priorities — thank you!</div></div>`:"")+
+  (n.note?`<div class="note" style="margin-bottom:14px"><h4>From ${esc(mom)}</h4><p>${esc(n.note)}</p></div>`:"")+
+  `<form novalidate data-form="claim" class="form"><input type="hidden" name="id" value="${esc(n.id)}">
+   <div class="field"><label class="lbl">Note back <span class="opt">optional</span></label><textarea name="note" rows="2" maxlength="400" placeholder="e.g. I'll bring snacks"></textarea></div>
+   ${nameFields()}<button class="btn primary block" type="submit">I'll do it</button></form>`)}
+function mealSheet(date,type){
+  if(!guardWrite())return;const m=S.settings.meals;
+  if(!m.enabled){toast("The meal train isn't on yet.");return}
+  const t=today();const open=mealSlots().filter(s=>s.date>=t&&!mealFor(s.date,s.type));
+  if(!date){if(!open.length){toast("Every meal is covered right now 🎉");return}date=open[0].date;type=open[0].type}
+  const opts=open.map(s=>`<option value="${s.date}|${s.type}" ${s.date===date&&s.type===type?"selected":""}>Day ${dayNum(s.date)} · ${fmtDate(s.date)} · ${MEALTYPES[s.type]}</option>`).join("");
+  const dt=type==="lunch"?"12:00":type==="breakfast"?"08:00":"17:00";
+  openSheet(sheetHead("🥘 Bring a meal","Thank you! Here's what helps.")+
+  `<div class="notes" style="margin:0 0 16px">${m.allergies?`<div class="note alert"><h4>⚠️ Allergies</h4><p>${esc(m.allergies)}</p></div>`:""}${m.household?`<div class="note"><h4>Feeding</h4><p>${esc(m.household)}</p></div>`:""}${m.loves?`<div class="note"><h4>We love</h4><p>${esc(m.loves)}</p></div>`:""}${m.dropoff?`<div class="note"><h4>Drop-off</h4><p>${esc(m.dropoff)}</p></div>`:""}</div>
+  <form novalidate data-form="meal" class="form">
+   <div class="field"><label class="lbl">Which day?</label><select name="slot">${opts}</select></div>
+   <div class="field"><label class="lbl">What are you bringing?</label><input name="dish" required maxlength="80" placeholder="e.g. Chicken soup + bread"></div>
+   <div class="field"><label class="lbl">Drop-off around</label>${timeSelect("start",dt)}</div>
+   <div class="field"><label class="lbl">Ingredients or reheating notes <span class="opt">optional</span></label><textarea name="note" rows="2" maxlength="400" placeholder="Contains dairy · 350° for 20 min"></textarea></div>
+   ${nameFields()}<button class="btn primary block" type="submit">Count me in</button></form>`)}
+function successSheet(item,msg){
+  openSheet(`<div class="success"><div class="big">💛</div><h3 style="font-size:24px;margin-top:6px">${msg||"You're on the schedule!"}</h3>
+   <p class="muted">${fmtDate(item.date,{weekday:"long",month:"long",day:"numeric"})} · ${item.kind==="meal"?"drop-off ~"+fmtTime(item.start):fmtRange(item.start,item.dur)}</p>
+   <p class="small muted" style="margin:16px 0 8px">Add it to your calendar</p>${calLinks({...item,uid:S.me.id},true)}
+   ${S.feed.ready&&!subscribed()?`<div style="margin-top:16px;text-align:left">${myCalCard(true)}</div>`:""}
+   ${S.authUser&&S.authUser.isAnonymous?`<p class="small muted" style="margin:18px 0 6px">Want your sign-ups on your other phone or in the Home Screen app?</p><button class="btn soft sm" data-act="acctsheet">Save them with your email</button>`:""}
+   <div style="margin-top:20px"><button class="btn ghost" data-act="close">Done</button></div></div>`)}
+function copyText(txt,label){
+  const done=()=>toast(label||"Copied");
+  try{navigator.clipboard.writeText(txt).then(done,()=>showCopy(txt))}catch(e){showCopy(txt)}
+}
+function showCopy(txt){openSheet(sheetHead("Copy this","Select the text and copy it.")+`<div class="field"><textarea rows="8" readonly onclick="this.select()">${esc(txt)}</textarea></div>`)}
+
+/* ---------- events ---------- */
+document.addEventListener("click",async e=>{
+  const a=e.target.closest("[data-act]");if(!e.target.closest("#pop")&&!(a&&(a.dataset.act==="selday"||a.dataset.act==="mealday"||a.dataset.act==="myday"||a.dataset.act==="anotherday")))closePop();if(!a)return;const act=a.dataset.act;if(a.closest("#pop")&&act!=="closepop")closePop();
+  if(act==="close"){closeSheet();return}
+  if(act==="landing"){e.preventDefault();closeSheet();goLanding();return}
+  if(act==="startfam"){if(S.authUser&&!S.authUser.isAnonymous)createSheet();else signInFirst();return}
+  if(act==="apple"){try{await FB.auth.apple();await onUser(FB.auth.current());if(!S.pendingCreate)closeSheet();toast("Signed in")}catch(e){if(e&&e.code!=="auth/popup-closed-by-user")toast("Apple sign-in didn't finish ("+(e.code||"error")+"). Try email and password instead.",4500)}return}
+  if(act==="share"){shareSheet(false);return}
+  if(act==="sharenow"){try{await navigator.share({title:"The First 40 Days",text:shareText(),url:inviteLink()})}catch(_){}return}
+  if(act==="copyinvite"){copyText(shareText()+" "+inviteLink(),"Link copied — paste it in a text or email");return}
+  if(act==="delfam"){openSheet(sheetHead("Delete this page for good?","This can't be undone.")+`<p class="muted">Every request, sign-up and phone number on this page will be erased, and the link will stop working.</p><form novalidate data-form="delfam" class="form"><div class="field"><label class="lbl">Type DELETE to confirm</label><input name="confirm" required autocomplete="off"></div><button class="btn primary block" type="submit">Delete the page</button></form>`);return}
+  if(act==="delacct"){const anon=S.authUser&&S.authUser.isAnonymous;openSheet(sheetHead(anon?"Remove your info?":"Delete your account?","This can't be undone.")+`<p class="muted">${S.fid?"Your sign-ups and phone number on this page will be removed. ":""}${anon?"":"Your account and email will be deleted. "}${!anon?"If you started any family pages, delete those first from their Manage tab.":""}</p><div class="calrow"><button class="btn primary" data-act="dodelacct">${anon?"Remove my info":"Delete my account"}</button><button class="btn ghost" data-act="close">Keep it</button></div>`);return}
+  if(act==="dodelacct"){const u=S.authUser;if(!u)return;
+    if(!u.isAnonymous){try{const q=await S.db.query("families","ownerUids",u.uid).get();if(q.docs.length){toast("Delete your family page first (Manage tab), then delete your account.",5000);return}}catch(e){console.warn(e)}}
+    await removeMeFromFamily();lsSet("");
+    try{await FB.auth.deleteAccount();closeSheet();toast(u.isAnonymous?"Your info is removed":"Your account is deleted",4000)}catch(e){toast(e&&e.code==="auth/requires-recent-login"?"For safety, sign out and back in, then try again.":authMsg(e),5000)}return}
+  if(act==="install"){installSheet();return}
+  if(act==="hideinstall"){try{localStorage.setItem("f40-hide-install","1")}catch(_){}render();toast("You can still add it from My Shifts");return}
+  if(act==="copylink"){copyText(S.fid?inviteLink():SITE,"Link copied — paste it into Safari");return}
+  if(act==="subbed"){try{localStorage.setItem("f40-sub","1")}catch(_){}setTimeout(render,1500);return}
+  if(act==="resub"){try{localStorage.removeItem("f40-sub")}catch(_){}render();return}
+  if(act==="acctsheet"){accountSheet();return}
+  if(act==="forgotpw"){const f=a.closest("form");const em=f&&f.email?String(f.email.value).trim():"";if(!em){toast("Type your email first, then tap Forgot password");f&&f.email&&f.email.focus();return}
+    try{await FB.auth.reset(em);toast("Check your email for a link to set a new password 📬",4500)}catch(e){toast(authMsg(e),4500)}return}
+  if(act==="verify"){try{await FB.auth.verify();toast("Sent — tap the link in the email, then come back",4500)}catch(e){toast(authMsg(e),4500)}return}
+  if(act==="reloaduser"){try{const u=await FB.auth.reload();await onUser(u);toast(u&&u.emailVerified?"Email confirmed 💛":"Not confirmed yet — check your email")}catch(e){toast(authMsg(e))}return}
+  if(act==="fillname"){const f=a.closest("form");if(f&&f.pname){f.pname.value=a.dataset.name;f.pname.classList.remove("err")}return}
+  if(act==="iam"){if(!guardWrite())return;const n=a.dataset.name;try{await saveMine(d=>{d.name=n;return d});lsSet(n);toast(`Welcome back, ${n} 💛`)}catch(_){}return}
+  if(act==="google"){try{await FB.auth.google();await onUser(FB.auth.current());if(!S.pendingCreate)closeSheet();toast("Signed in")}catch(e){if(e&&e.code!=="auth/popup-closed-by-user")toast("Google sign-in didn't finish. On the Home Screen app, use Sign in with email link instead.")}return}
+  if(act==="emaillink"){openSheet(sheetHead("Sign in with email","We'll email you a sign-in link — no password.")+`<form novalidate data-form="sendlink" class="form"><div class="field"><label class="lbl">Your email</label><input name="email" type="email" required placeholder="you@example.com" autocomplete="email"></div><button class="btn primary block" type="submit">Email me a link</button></form>`);return}
+  if(act==="pastelink"){openSheet(sheetHead("Paste your sign-in link","Press and hold the link in the email, tap Copy Link, then paste it here.")+`<form novalidate data-form="pastelink" class="form"><div class="field"><input name="link" type="url" required placeholder="https://…"></div><button class="btn primary block" type="submit">Sign in</button></form>`);return}
+  if(act==="signout"){await FB.auth.signOut();S.myFamilies=null;toast("Signed out");return}
+  if(act==="rmadmin"){try{await S.db.doc(P("admins/"+a.dataset.email)).delete();toast("Removed")}catch(e){handleErr(e)}return}
+  if(act==="tab"){closeSheet();S.tab=a.dataset.tab;render();window.scrollTo({top:0,behavior:"smooth"});return}
+  if(act==="help")return helpSheet(a.dataset.date,a.dataset.cat);
+  if(act==="prep")return prepSheet(a.dataset.k,a.dataset.o,a.dataset.free==="1");
+  if(act==="prepjump"){const el=document.getElementById("prep-"+a.dataset.k);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});return}
+  if(act==="pickdish"){const f=a.closest("form");if(f&&f.dish)f.dish.value=a.dataset.v;return}
+  if(act==="meal")return mealSheet(a.dataset.date,a.dataset.type);
+  if(act==="claim")return claimSheet(a.dataset.id);
+  if(act==="filter"){S.filter=a.dataset.f;render();return}
+  if(act==="view"){S.view=a.dataset.v;render();return}
+  if(act==="selday"){S.sel=a.dataset.date;render();const cell=document.querySelector(`.cc[data-date="${S.sel}"]`);showDayMenu(S.sel,cell);return}
+  if(act==="closepop"){closePop();return}
+  if(act==="mview"){S.mview=a.dataset.v;render();return}
+  if(act==="myday"){showBubble(myDayMenu(a.dataset.date),a);return}
+  if(act==="anotherday"){const cell=document.querySelector(`.cc[data-date="${a.dataset.date}"]`);showBubble(dayMenu(a.dataset.date),window.innerWidth<700?null:cell);return}
+  if(act==="mealday"){showBubble(mealMenu(a.dataset.date),a);return}
+  if(act==="past"){S.showPast=!S.showPast;render();return}
+  if(act==="pastmeals"){S.showPastMeals=!S.showPastMeals;render();return}
+  if(act==="goday"){S.tab="schedule";S.filter="all";S.sel=a.dataset.date;if(a.dataset.date<today())S.showPast=true;render();const el=document.getElementById("d-"+a.dataset.date);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});return}
+  if(act==="icsone"){const p=S.people[a.dataset.uid]||mine();const i=(p.items||[]).find(x=>x.id===a.dataset.id);if(i)saveIcs("first-40-days-"+i.date,"The First 40 Days",[itemEvent({...i,uid:a.dataset.uid})],"quiet");return}
+  if(act==="icsmine"){const its=myAll().filter(i=>i.date>=today());saveIcs("my-first-40-days","The First 40 Days — my shifts",its.map(i=>itemEvent(i)));return}
+  if(act==="icsfamily"){saveIcs("first-40-days-family","The First 40 Days",familyEvents());return}
+  if(act==="sync"){closePop();syncSheet();return}
+  if(act==="copyfeed"){copyText(FAMILY_ICS,"Calendar link copied — paste it into your calendar app");return}
+  if(act==="syncscope"){S.syncScope=a.dataset.v;syncSheet();return}
+  if(act==="syncgo"){const fam=S.syncScope==="family";saveIcs(fam?"first-40-days-family":"my-first-40-days",fam?"The First 40 Days":"The First 40 Days — my shifts",fam?familyEvents():myEvents(),a.dataset.t);return}
+  if(act==="copyev"){const p=S.people[a.dataset.uid]||mine();const i=(p.items||[]).find(x=>x.id===a.dataset.id);if(i)copyText(evText(i),"Event details copied");return}
+  if(act==="copyall"){const its=myAll().filter(i=>i.date>=today()).sort((x,y)=>(x.date+(x.start||"")).localeCompare(y.date+(y.start||"")));copyText(its.map(evText).join("\n\n"),"Your schedule is copied");return}
+  if(act==="cancel"){const i=myAll().find(x=>x.id===a.dataset.id);if(!i)return;
+    if(i.linked){openSheet(sheetHead("Signed up somewhere else",`${esc(evInfo(i).title)} · ${fmtDate(i.date)}`)+`<p class="muted">You signed up for this from another phone or browser (or from Safari instead of the Home Screen icon), so it can only be cancelled there. Or just text ${esc(mom)} and they'll take it off for you.</p><button class="btn ghost block" data-act="close">OK</button>`);return}
+    openSheet(sheetHead("Cancel this?",`${esc(evInfo(i).title)} · ${fmtDate(i.date)}`)+`<p class="muted">It'll open back up so someone else can take it. Maybe send ${esc(mom)} a quick text too.</p><div class="calrow"><button class="btn primary" data-act="docancel" data-id="${esc(i.id)}">Yes, cancel it</button><button class="btn ghost" data-act="close">Keep it</button></div>`);return}
+  if(act==="docancel"){const id=a.dataset.id;try{await saveMine(d=>{d.items=d.items.filter(x=>x.id!==id);return d});closeSheet();toast("Cancelled — thanks for letting us know")}catch(_){}return}
+  if(act==="pri"){const n=S.needs.find(x=>x.id===a.dataset.id);if(n)try{await store.setNeed({...n,priority:!n.priority});toast(n.priority?"Priority removed":"Marked as priority ★")}catch(_){}return}
+  if(act==="delneed"){const n=S.needs.find(x=>x.id===a.dataset.id);if(!n)return;
+    openSheet(sheetHead("Remove this request?",esc(n.title||(catInfo(n.cat)).label)+" · "+fmtDate(n.date))+`<p class="muted">${claimsFor(n).length?"Anyone already signed up keeps their spot on the schedule.":""}</p><div class="calrow"><button class="btn primary" data-act="dodelneed" data-id="${esc(n.id)}">Remove</button><button class="btn ghost" data-act="close">Keep</button></div>`);return}
+  if(act==="dodelneed"){try{await store.delNeed(a.dataset.id);closeSheet();toast("Request removed")}catch(_){}return}
+  if(act==="rmitem"){const u=a.dataset.uid,id=a.dataset.id;const p=clone(S.people[u]);if(!p.items)return;
+    openSheet(sheetHead("Remove this sign-up?",esc(nameOf(u)))+`<div class="calrow"><button class="btn primary" data-act="dormitem" data-id="${esc(id)}" data-uid="${esc(u)}">Remove</button><button class="btn ghost" data-act="close">Keep</button></div>`);return}
+  if(act==="dormitem"){const u=a.dataset.uid,id=a.dataset.id;const p=clone(S.people[u]);p.items=(p.items||[]).filter(x=>x.id!==id);try{await store.setPerson(u,p);closeSheet();toast("Removed")}catch(_){}return}
+});
+function authMsg(e){const c=e&&e.code||"";
+  return({"f40/wrong-password":"That password doesn't match this email. Tap Forgot password to set a new one.","auth/weak-password":"Pick a password with at least 6 characters.","auth/invalid-email":"That email doesn't look right.","auth/too-many-requests":"Too many tries — wait a few minutes and try again.","auth/operation-not-allowed":"Password sign-in isn't available right now — try another way to sign in.","auth/requires-recent-login":"For safety, sign out and back in, then set your password.","auth/network-request-failed":"No connection — try again in a moment."})[c]||("That didn't work"+(c?" ("+c+")":"")+" — please try again.")}
+function applyName(d,fd){if(fd.has("pname")){d.name=String(fd.get("pname")).trim().slice(0,60);lsSet(d.name);d.phone=String(fd.get("pphone")||"").trim().slice(0,30)}return d}
+document.addEventListener("submit",async e=>{
+  e.preventDefault();const f=e.target,kind=f.dataset.form;
+  if(!kind||kind==="confirmemail")return;
+  f.querySelectorAll(".err").forEach(x=>x.classList.remove("err"));
+  const bad=[...f.querySelectorAll("input,select,textarea")].find(x=>!x.checkValidity()||(x.required&&!String(x.value).trim()));
+  if(bad){bad.classList.add("err");bad.scrollIntoView({behavior:"smooth",block:"center"});setTimeout(()=>bad.focus(),250);
+    toast(bad.name==="pname"?"Please add your name first ✍️":bad.type==="email"?"Please enter a valid email":bad.type==="password"?"Password needs at least 6 characters":bad.name==="dish"?"Tell us what you're bringing":"Please fill in the highlighted box",3200);return}
+  const fd=new FormData(f);const btn=f.querySelector('[type="submit"]');let label="";if(btn){btn.disabled=true;label=btn.textContent;btn.textContent="Saving…"}
+  try{
+    if(kind==="createfam"){await createFamily(fd);return}
+    if(kind==="openlink"){const raw=String(fd.get("link")||"").trim();let f="";try{f=new URL(raw,location.href).searchParams.get("f")||""}catch(_){}if(!f&&validFid(raw))f=raw;
+      if(!validFid(f)){toast("That doesn't look like a First 40 Days link — check it and try again.",4000);return}history.pushState(null,"","?f="+encodeURIComponent(f));openFamily(f);return}
+    if(kind==="delfam"){if(String(fd.get("confirm")||"").trim().toUpperCase()!=="DELETE"){toast("Type DELETE to confirm");return}const fid=S.fid;
+      try{await wipeFamily(fid);forget(fid);closeSheet();toast("Your page is deleted");goLanding()}catch(e){handleErr(e)}return}
+    if(kind==="pastelink"){const l=String(fd.get("link")||"").trim();closeSheet();try{const ok=await FB.auth.finishLink(askEmail,l);if(!ok){toast("That doesn't look like the sign-in link — copy it from the email again.");return}await onUser(FB.auth.current());toast("You're signed in 💛");render()}catch(e){console.warn(e);toast("That link didn't work — it may have expired. Send a new one.")}return}
+    if(kind==="pw"){const em=String(fd.get("email")||"").trim(),pw=String(fd.get("pw")||"");try{localStorage.setItem("f40-email",em)}catch(_){}
+      try{const r=await FB.auth.password(em,pw);await onUser(FB.auth.current());closeSheet();
+        if(r.created&&S.admins.includes(em.toLowerCase())){try{await FB.auth.verify()}catch(_){}}
+        toast(r.created?"Account made — you're all set 💛":"You're signed in 💛",3500);render()}
+      catch(e){toast(authMsg(e),5000)}return}
+    if(kind==="setpw"){try{await FB.auth.setPassword(String(fd.get("pw")||""));f.reset();toast("Password saved — use it to sign in anywhere")}catch(e){toast(authMsg(e),5000)}return}
+    if(kind==="sendlink"){const em=String(fd.get("email")||"").trim();await FB.auth.sendLink(em);openSheet(sheetHead("Check your email 📬",`We sent a sign-in link to <b>${esc(em)}</b>.`)+`<p class="muted">If you're in Safari, just tap the link in the email. If you're using the Home Screen icon, press and hold the link in the email, tap <b>Copy Link</b>, then come back here and tap <b>Paste link</b> under My Shifts. Not there in a minute? Check Junk.</p><button class="btn primary block" data-act="pastelink">Paste link</button><button class="btn ghost block" style="margin-top:8px" data-act="close">OK</button>`);return}
+    if(kind==="admin"){const em=String(fd.get("email")||"").trim().toLowerCase();if(!em)return;await S.db.doc(P("admins/"+em)).set({addedAt:Date.now()});f.reset();toast("Added — they'll get the Manage tab after signing in with that email");return}
+    if(kind==="help"){const item={id:uid(),kind:"help",cat:fd.get("cat")||"other",title:String(fd.get("title")||"").trim(),date:fd.get("date"),start:fd.get("start"),dur:+fd.get("dur")||60,note:String(fd.get("note")||"").trim(),at:Date.now()};
+      await saveMine(d=>{applyName(d,fd);d.items.push(item);return d});successSheet(item)}
+    else if(kind==="prep"){const k=fd.get("k"),c=PREP[k];const ok=String(fd.get("opt")||"");const o=c.opts.find(x=>x.k===ok);
+      const free=ok==="idea";const item={id:uid(),kind:free?"help":"prep",cat:free?"other":k,opt:ok,title:o?o.t:"Getting-ready idea",date:fd.get("date"),start:fd.get("start"),dur:+fd.get("dur")||c.dur,note:String(fd.get("note")||"").trim(),at:Date.now()};
+      const dish=String(fd.get("dish")||"").trim();if(dish)item.dish=dish;
+      await saveMine(d=>{applyName(d,fd);d.items.push(item);return d});successSheet(item,"Thank you for helping us get ready!")}
+    else if(kind==="claim"){const n=S.needs.find(x=>x.id===fd.get("id"));if(!n)throw 0;if(!isOpen(n)){toast("Someone just took that one — thank you anyway!");closeSheet();return}
+      const item={id:uid(),kind:"help",needId:n.id,cat:n.cat,title:n.title||"",date:n.date,start:n.start,dur:+n.dur,note:String(fd.get("note")||"").trim(),at:Date.now()};
+      await saveMine(d=>{applyName(d,fd);d.items.push(item);return d});successSheet(item,"Thank you — it's yours!")}
+    else if(kind==="meal"){const[date,type]=String(fd.get("slot")).split("|");const ex=mealFor(date,type);if(ex&&ex.uid!==S.me.id){toast("Someone just grabbed that one — pick another day?");return}
+      const item={id:uid(),kind:"meal",mealType:type,date,start:fd.get("start"),dur:30,dish:String(fd.get("dish")||"").trim(),note:String(fd.get("note")||"").trim(),at:Date.now()};
+      await saveMine(d=>{applyName(d,fd);d.items.push(item);return d});successSheet(item,"Dinner is on you — thank you!".replace("Dinner",MEALTYPES[type]))}
+    else if(kind==="profile"){if(!guardWrite())return;await saveMine(d=>applyName(d,fd));toast("Saved")}
+    else if(kind==="settings"){const s=clone(S.settings);["startDate","dueText","babyName","momName","partnerName","kidName","family","welcome","address","visitNotes","kidNotes"].forEach(k=>s[k]=String(fd.get(k)||"").trim());s.born=fd.has("born");await store.setSettings(s);toast("Saved")}
+    else if(kind==="meals"){const s=clone(S.settings);s.meals={enabled:fd.has("enabled"),types:fd.getAll("types"),every:+fd.get("every")||1};["dropoff","household","allergies","loves","avoid","instructions"].forEach(k=>s.meals[k]=String(fd.get(k)||"").trim());if(!s.meals.types.length)s.meals.types=["dinner"];await store.setSettings(s);toast("Meal train saved")}
+    else if(kind==="need"){const base={cat:fd.get("cat")||"other",title:String(fd.get("title")||"").trim(),start:fd.get("start"),dur:+fd.get("dur")||60,spots:+fd.get("spots")||1,priority:fd.has("priority"),note:String(fd.get("note")||"").trim()};
+      const from=fd.get("date"),until=fd.get("until"),rep=fd.get("repeat");let ds=[from];
+      if(rep!=="once"){ds=[];for(let d=from,i=0;d<=until&&i<40;d=addDays(d,1),i++){const wd=parse(d).getDay();
+        if(rep==="daily"||(rep==="alt"&&i%2===0)||(rep==="weekdays"&&wd>0&&wd<6)||(rep==="weekly"&&i%7===0))ds.push(d)}}
+      for(const d of ds)await store.setNeed({id:uid(),...base,date:d,at:Date.now()});
+      f.reset();toast(ds.length>1?`Posted ${ds.length} requests`:"Request posted")}
+  }catch(err){if(!(err&&err._shown)){console.warn(err);toast("Something went wrong"+(err&&err.code?" ("+err.code+")":"")+" — please try again.",4500)}}finally{if(btn){btn.disabled=false;if(label)btn.textContent=label}}
+});
+document.addEventListener("change",e=>{const r=e.target;if(r.name==="opt"&&r.dataset.dur){const d=r.form.querySelector(`input[name="dur"][value="${r.dataset.dur}"]`);if(d)d.checked=true}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeSheet();closePop()}});
+
+/* ---------- family pages: start one, find yours, share it ---------- */
+const newFid=()=>{const b=crypto.getRandomValues(new Uint8Array(15));return btoa(String.fromCharCode(...b)).replace(/\+/g,"-").replace(/\//g,"_")};
+const validFid=f=>!!f&&/^[A-Za-z0-9_-]{4,40}$/.test(f);
+function recent(){try{return JSON.parse(localStorage.getItem("f40-recent")||"[]")}catch(_){return[]}}
+function remember(fid,name){if(!fid||fid==="demo")return;try{const r=recent().filter(x=>x.f!==fid);r.unshift({f:fid,name:name||"",at:Date.now()});localStorage.setItem("f40-recent",JSON.stringify(r.slice(0,8)));localStorage.setItem("f40-last",fid)}catch(_){}}
+function forget(fid){try{localStorage.setItem("f40-recent",JSON.stringify(recent().filter(x=>x.f!==fid)));if(localStorage.getItem("f40-last")===fid)localStorage.removeItem("f40-last")}catch(_){}}
+function pickFid(){const q=new URLSearchParams(location.search);let f=q.get("f");
+  if(!f&&q.has("demo"))f="demo";
+  if(!f&&isStandalone())f=lsGet2("f40-last")||null; // a Home Screen launch can drop the ?f= link
+  return validFid(f)?f:null}
+function signedInEmail(u){const pd=(u&&u.providerData)||[];return(u&&!u.isAnonymous&&(u.email||(pd.find(x=>x&&x.email)||{}).email)||"").toLowerCase()}
+async function loadMyFamilies(){const u=S.authUser;if(!u||u.isAnonymous||S.fid){S.myFamilies=null;return}
+  try{const q=await S.db.query("families","ownerUids",u.uid).get();S.myFamilies=q.docs.map(d=>({f:d.id,name:(d.data()||{}).name||""}))}catch(e){console.warn(e);S.myFamilies=[]}render()}
+function landingView(){
+  const u=S.authUser,own=S.myFamilies||[];const seen=new Set(own.map(x=>x.f));const rec=recent().filter(x=>!seen.has(x.f));
+  const pages=own.map(x=>({...x,owner:true})).concat(rec);
+  let h=`<section><div class="card hero" style="grid-template-columns:1fr"><div>
+    <h2 style="font-size:28px">Gather your village for the first 40 days</h2>
+    <p class="sub" style="font-size:16px;margin-top:10px">One shared page where family and friends sign up to bring meals, hold the baby, do a load of laundry or take the big kids to the park, so the new mom can rest.</p>
+    <div class="cta"><button class="btn primary" data-act="startfam">Start your family's page</button><a class="btn ghost" href="?demo">See a demo</a></div></div></div></section>`;
+  if(pages.length)h+=`<section><div class="sec-h"><h2>Your pages</h2></div><div class="stack">${pages.map(x=>`<a class="row" style="text-decoration:none;color:inherit" href="?f=${encodeURIComponent(x.f)}"><div class="ico" style="background:var(--rose-s)">💛</div><div class="rb"><div class="rt">${esc(x.name||"Family page")}</div><div class="rm">${x.owner?"You manage this page":"Opened on this device"}</div></div><span class="linkbtn">Open ›</span></a>`).join("")}</div></section>`;
+  h+=`<section><div class="sec-h"><h2>How it works</h2></div><div class="card"><ul class="tips">
+    <li><span>1</span><div><b>Start your page</b> in about a minute: names, the due date and any food allergies.</div></li>
+    <li><span>2</span><div><b>Ask for what you need.</b> Post requests, mark the ones that matter most, and turn on a meal train.</div></li>
+    <li><span>3</span><div><b>Share one link.</b> Helpers pick a time, get it on their calendar, and everyone can see what's covered. No app or account needed for them.</div></li></ul></div></section>`;
+  h+=`<section><div class="card"><div class="admin-h"><h3>Got an invite link?</h3></div><form novalidate data-form="openlink" class="form" style="flex-direction:row;gap:8px"><div class="field" style="flex:1"><input name="link" required placeholder="Paste the link you were sent"></div><button class="btn primary" type="submit">Open</button></form></div></section>`;
+  if(u&&!u.isAnonymous)h+=`<section><div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Signed in</b><div class="small muted">${esc(signedInEmail(u))}</div></div><button class="btn ghost sm" data-act="signout">Sign out</button><button class="btn ghost sm" data-act="delacct">Delete account</button></div></section>`;
+  else h+=`<p class="small muted" style="text-align:center;margin-top:18px">Started a page before? <button class="linkbtn" data-act="acctsheet">Sign in</button> to find it.</p>`;
+  return h}
+function signInFirst(){S.pendingCreate=true;openSheet(sheetHead("First, make your account","So you can come back and manage your page from any phone.")+
+  `<div class="calrow" style="margin-bottom:14px"><button class="btn ghost" data-act="apple">${ICON_A} Sign in with Apple</button><button class="btn ghost" data-act="google">Google</button></div>`+pwForm())}
+function createSheet(){S.pendingCreate=false;
+  openSheet(sheetHead("Start your family's page","You can change any of this later.")+`<form novalidate data-form="createfam" class="form">
+   <div class="two"><div class="field"><label class="lbl">New mom's first name</label><input name="momName" required maxlength="40" placeholder="e.g. Maya"></div>
+   <div class="field"><label class="lbl">Partner <span class="opt">optional</span></label><input name="partnerName" maxlength="40" placeholder="e.g. Sam"></div></div>
+   <div class="field"><label class="lbl">Big brothers or sisters <span class="opt">optional</span></label><input name="kidName" maxlength="60" placeholder="e.g. Theo, or Theo & Ava"><small class="small muted" style="display:block;margin-top:6px">Adds "Time with Theo" as a way to help.</small></div>
+   <div class="field"><label class="lbl">Due date or birthday <span class="opt">optional</span></label><input type="date" name="startDate"></div>
+   <label class="toggle"><input type="checkbox" name="born"><div><b>Baby has arrived</b><small>The 40 days count from the birthday</small></div></label>
+   <div class="field"><label class="lbl">⚠️ Food allergies <span class="opt">optional</span></label><input name="allergies" maxlength="300" placeholder="e.g. no peanuts or tree nuts"></div>
+   <p class="small muted" style="margin:0">By starting a page you agree to the <a href="terms.html" target="_blank">Terms</a> and <a href="privacy.html" target="_blank">Privacy Policy</a>.</p>
+   <button class="btn primary block" type="submit">Create our page</button></form>`)}
+async function createFamily(fd){
+  const u=S.authUser;if(!u||u.isAnonymous){signInFirst();return}
+  const t=k=>String(fd.get(k)||"").trim();const momName=t("momName"),partnerName=t("partnerName"),kidName=t("kidName");
+  const fid=newFid();const name=[momName,partnerName].filter(Boolean).join(" & ");
+  await S.db.doc("families/"+fid).set({name,ownerUids:[u.uid],createdAt:Date.now(),createdBy:u.uid});
+  const st=merge(DEFAULTS,{momName,partnerName,kidName,startDate:t("startDate"),born:fd.has("born"),tz:Intl.DateTimeFormat().resolvedOptions().timeZone||"",
+    family:[momName,partnerName,kidName].filter(Boolean).join(" · ")+" · baby"});st.meals.allergies=t("allergies");
+  await S.db.doc(`families/${fid}/settings/main`).set(st);
+  remember(fid,name);history.pushState(null,"","?f="+encodeURIComponent(fid));S.justCreated=true;S.tab="manage";openFamily(fid);closeSheet();
+  setTimeout(()=>shareSheet(true),400)}
+function shareText(){return`We're using The First 40 Days to organize help after the baby comes. Sign up for a meal or a time to help here:`}
+function shareSheet(first){const link=inviteLink();
+  openSheet(sheetHead(first?"Your page is ready 💛":"Invite your people",first?"Send this link to the family and friends you'd like to help.":"Anyone with this link can see the schedule and sign up.")+
+   `<div class="field"><input readonly value="${esc(link)}" onclick="this.select()"></div>
+   <div class="calrow" style="margin-top:12px">${navigator.share?`<button class="btn primary" data-act="sharenow">Share the link</button>`:""}<button class="btn ${navigator.share?"ghost":"primary"}" data-act="copyinvite">Copy the link</button></div>
+   <p class="small muted" style="margin-top:14px">Only share it with people you trust: the link shows your schedule and the address you add. Phone numbers stay private to you.</p>`)}
+function shareCard(){return`<section><div class="card subcard" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="font-size:28px">🔗</div><div style="flex:1;min-width:200px"><b>Invite your people</b><div class="small muted">Send your page's link by text, email or the family group chat.</div></div><button class="btn primary sm" data-act="share">Share link</button></div></section>`}
+function dangerCard(){if(!S.isOwner)return"";return`<section><div class="card"><div class="admin-h"><h3>Delete this page</h3></div><p class="small muted" style="margin:-6px 0 12px">Removes the schedule, every sign-up and all phone numbers for good. Helpers' links stop working.</p><button class="btn ghost" data-act="delfam">Delete this family page</button></div></section>`}
+async function wipeFamily(fid){for(const c of["needs","people","contacts","admins","settings"]){const q=await S.db.collection(`families/${fid}/${c}`).get();for(const d of q.docs)await S.db.doc(`families/${fid}/${c}/${d.id}`).delete()}await S.db.doc("families/"+fid).delete()}
+async function removeMeFromFamily(){if(!S.fid||!S.me.id)return;try{await S.db.doc(P("people/"+S.me.id)).delete()}catch(e){console.warn(e)}try{await S.db.doc(P("contacts/"+S.me.id)).delete()}catch(e){console.warn(e)}}
+function goLanding(push=true){famSubs.forEach(f=>{try{f()}catch(_){}});famSubs=[];S.fid=null;S.family=null;S.isAdmin=S.isOwner=false;if(push)history.pushState(null,"",location.pathname);S.tab="home";render();loadMyFamilies()}
+
+/* ---------- boot ---------- */
+async function refreshProfiles(){}
+function askEmail(){return new Promise(res=>{openSheet(sheetHead("Confirm your email","For security, type the email you asked the link for.")+`<form novalidate data-form="confirmemail" class="form"><div class="field"><input name="email" type="email" required autocomplete="email"></div><button class="btn primary block" type="submit">Sign in</button></form>`);
+  const f=$("#sheet form");f.addEventListener("submit",e=>{e.preventDefault();e.stopImmediatePropagation();res(String(new FormData(f).get("email")||"").trim());closeSheet()},{capture:true,once:true})})}
+let subs=[],famSubs=[];
+// Co-managers: owners see the whole list; everyone else just checks their own email.
+async function checkAdmin(){const u=S.authUser,em=signedInEmail(u);if(!S.fid||!em||S.isOwner)return;
+  try{const d=await S.db.doc(P("admins/"+em)).get();if(d.exists&&!S.admins.includes(em)){S.admins=S.admins.concat([em]);S.isAdmin=true;subscribeAdminData();render()}}catch(_){}}
+function subscribeAdminData(){
+  subs.forEach(u=>{try{u()}catch(_){}});subs=[];
+  if(!S.isAdmin||!S.fid)return;
+  subs.push(S.db.collection(P("admins")).onSnapshot(q=>{S.admins=q.docs.map(d=>d.id.toLowerCase());render()},()=>{}));
+  subs.push(S.db.collection(P("contacts")).onSnapshot(q=>{S.contacts=Object.fromEntries(q.docs.map(d=>[d.id,d.data()]));render()},e=>console.warn(e)));
+}
+async function onUser(u){
+  const changed=(S.authUser&&S.authUser.uid)!==(u&&u.uid);
+  S.authUser=u;S.me={id:u?u.uid:null,name:(u&&u.displayName)||""};
+  const email=signedInEmail(u);
+  S.isOwner=!!(u&&S.family&&(S.family.ownerUids||[]).includes(u.uid));
+  S.isAdmin=S.isOwner||(!!email&&S.admins.includes(email));
+  if(!S.isAdmin&&S.tab==="manage")S.tab="home";
+  if(S.fid&&u&&(changed||!famSubs.length))openFamily(S.fid);
+  S.myContact="";if(u&&S.fid){S.db.doc(P("contacts/"+u.uid)).get().then(d=>{S.myContact=(d.exists&&d.data().phone)||"";render()}).catch(()=>{})}
+  subscribeAdminData();checkAdmin();
+  if(!S.fid&&changed)loadMyFamilies();
+  if(S.pendingCreate&&u&&!u.isAnonymous){S.pendingCreate=false;setTimeout(createSheet,80)}
+  render();
+}
+function openFamily(fid){
+  famSubs.forEach(f=>{try{f()}catch(_){}});famSubs=[];
+  const db=S.db;S.fid=fid;S.live=true;S.missing=false;S.stale=false;S.loaded={s:false,n:false,p:false,f:false};
+  S.settings=clone(DEFAULTS);S.needs=[];S.people={};S.admins=[];S.contacts={};applyFamily();
+  const timer=setTimeout(()=>{S.stale=true;render()},10000);
+  const done=k=>{S.loaded[k]=true;if(S.loaded.s&&S.loaded.n&&S.loaded.p&&S.loaded.f){clearTimeout(timer);S.stale=false}render()};
+  const fail=e=>{console.warn(e);clearTimeout(timer);if(e&&e.code==="permission-denied"&&!S.family)S.missing=true;else S.stale=true;S.loaded={s:true,n:true,p:true,f:true};render()};
+  famSubs.push(db.doc("families/"+fid).onSnapshot(d=>{if(!d.exists){clearTimeout(timer);S.missing=true;S.family=null;render();return}
+    S.family=d.data();remember(fid,S.family.name);done("f");if(S.authUser){const was=S.isAdmin;S.isOwner=(S.family.ownerUids||[]).includes(S.authUser.uid);S.isAdmin=S.isOwner||S.admins.includes(signedInEmail(S.authUser));if(was!==S.isAdmin)subscribeAdminData();checkAdmin();render()}},fail));
+  famSubs.push(db.doc(P("settings/main")).onSnapshot(s=>{S.settings=merge(DEFAULTS,s.exists?s.data():{});applyFamily();done("s")},fail));
+  famSubs.push(db.collection(P("needs")).onSnapshot(q=>{S.needs=q.docs.map(d=>({...d.data(),id:d.id}));done("n")},fail));
+  famSubs.push(db.collection(P("people")).onSnapshot(q=>{S.people=Object.fromEntries(q.docs.map(d=>[d.id,clone(d.data())]));done("p")},fail));
+}
+function boot(){
+  applyFamily();render();
+  const go=()=>{
+    S.db=FB.db;S.fid=pickFid();if(!S.fid)S.live=true;
+    FB.auth.onChange(u=>{if(!u){FB.auth.guest().catch(e=>{console.warn(e);toast("Couldn't connect — check your connection.")});return}onUser(u)});
+    FB.auth.finishLink(askEmail).then(async ok=>{if(ok){await onUser(FB.auth.current());toast("You're signed in 💛");if(S.fid)S.tab="mine";render()}}).catch(e=>{console.warn(e);toast("That sign-in link didn't work — it may have expired. Try again.")});
+  };
+  if(window.FB)go();else window.addEventListener("fb-ready",go,{once:true});
+  window.addEventListener("popstate",()=>{const f=pickFid();if(f!==S.fid){if(f)openFamily(f);else goLanding(false)}});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+boot();
+</script>
+</body>
+</html>
