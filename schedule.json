@@ -115,6 +115,16 @@
    "who": "Tia"
   },
   {
+   "id": "x9fm39udkzv",
+   "kind": "help",
+   "date": "2026-12-08",
+   "start": "16:30",
+   "dur": 120,
+   "cat": "talulah",
+   "label": "Time with Talulah",
+   "who": "Adele"
+  },
+  {
    "id": "1kr1zahtap4",
    "kind": "help",
    "date": "2026-12-09",
@@ -135,5 +145,5 @@
    "who": "Lauren"
   }
  ],
- "updated": "2026-11-23T14:45:28Z"
+ "updated": "2026-11-25T21:15:01Z"
 }
