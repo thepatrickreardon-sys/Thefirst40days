@@ -15,5 +15,6 @@ jobs:
       - name: Security rule tests
         working-directory: tests
         run: |
+          cp ../firestore.rules .
           npm i --no-audit --no-fund firebase-tools@13 @firebase/rules-unit-testing@3 firebase@10
           npx firebase emulators:exec --only firestore --project demo-f40 "node test.mjs"
