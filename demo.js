@@ -4,7 +4,7 @@ export function makeDemo(asHelper) {
   const store = new Map();           // path -> data
   const listeners = new Set();       // functions re-run after every write
   const clone = o => JSON.parse(JSON.stringify(o));
-  const ymd = d => d.toISOString().slice(0, 10);
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const day = n => { const d = new Date(); d.setDate(d.getDate() + n); return ymd(d); };
 
   // ---- sample family ----

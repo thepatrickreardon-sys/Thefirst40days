@@ -36,6 +36,17 @@ await t("verified co-manager posts need",assertSucceeds(setDoc(doc(coAdmin,F+"/n
 await t("unverified co-manager cannot",assertFails(setDoc(doc(coUnver,F+"/needs/n4"),{cat:"x"})));
 await t("co-manager cannot delete family",assertFails(deleteDoc(doc(coAdmin,F))));
 await t("owner cannot change owners",assertFails(setDoc(doc(owner,F),{name:"x",ownerUids:["mom","evil"],createdAt:1,createdBy:"mom"})));
+await t("signed-out cannot open a family",assertFails(getDoc(doc(nobody,F))));
+await t("anon cannot query families by owner",assertFails(getDocs(query(collection(anonH,"families"),where("ownerUids","array-contains","helper")))));
+await t("owner renames page",assertSucceeds(setDoc(doc(owner,F),{name:"Mom & Dad 2",ownerUids:["mom"],createdAt:1,createdBy:"mom"})));
+await t("owner cannot add extra family fields",assertFails(setDoc(doc(owner,F),{name:"x",ownerUids:["mom"],createdAt:1,createdBy:"mom",plan:"free"})));
+await t("settings doc must be 'main'",assertFails(setDoc(doc(owner,F+"/settings/other"),{a:1})));
+await t("helper cannot delete someone else's sign-ups",assertFails(deleteDoc(doc(anon2,F+"/people/helper"))));
+await t("family can tidy a helper's sign-ups",assertSucceeds(setDoc(doc(owner,F+"/people/helper"),{name:"Lee",items:[],updatedAt:2})));
+await t("unverified email cannot peek at co-manager list entry",assertFails(getDoc(doc(coUnver,F+"/admins/sis@x.com"))));
+await t("co-manager cannot rename or take over page",assertFails(setDoc(doc(coAdmin,F),{name:"mine",ownerUids:["sis"],createdAt:1,createdBy:"mom"})));
+await t("helper cannot read co-manager entry",assertFails(getDoc(doc(anonH,F+"/admins/sis@x.com"))));
+await t("phone must be short text",assertFails(setDoc(doc(anonH,F+"/contacts/helper"),{phone:"x".repeat(40)})));
 await t("helper removes own info",assertSucceeds(deleteDoc(doc(anonH,F+"/contacts/helper"))));
 await t("owner deletes family",assertSucceeds(deleteDoc(doc(owner,F))));
 await t("random top-level path closed",assertFails(setDoc(doc(owner,"users/mom"),{a:1})));

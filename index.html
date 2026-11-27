@@ -20,7 +20,9 @@
 <script type="module">
 // Backend adapter: exposes window.FB with a tiny db/auth API the app uses.
 // Live mode talks to Firebase. Demo mode (?demo, or no Firebase config yet) keeps everything in memory.
-import {FIREBASE_CONFIG} from "./config.js";
+import * as CFG from "./config.js";
+const {FIREBASE_CONFIG}=CFG;
+window.F40CFG={business:CFG.BUSINESS_NAME||"",place:CFG.BUSINESS_PLACE||"",email:CFG.SUPPORT_EMAIL||"",apple:!!CFG.APPLE_SIGN_IN};
 const qs=new URLSearchParams(location.search);
 const DEMO=qs.has("demo")||!FIREBASE_CONFIG.apiKey;
 if(DEMO){
@@ -378,6 +380,7 @@ section{margin-top:26px}
 .admin-h .n{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--rose-s);color:var(--rose-d);font-weight:700;font-size:14px}
 .iconbtn{border:1px solid var(--line2);background:#fff;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-size:16px;color:var(--ink2)}
 .iconbtn.on{background:var(--rose);border-color:var(--rose);color:#fff}
+.footlinks{text-align:center;font-size:13px;margin-top:8px;color:var(--muted)}.footlinks a{color:var(--muted)}
 .foot{text-align:center;color:var(--muted);font-size:13px;margin-top:40px;font-family:var(--serif);font-style:italic}
 .prep-h{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
 .prep-h .ico{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:24px;flex:none}
@@ -417,6 +420,7 @@ section{margin-top:26px}
   <div id="banners"></div>
   <main id="main"><div class="loading"><div class="spin"></div>Gathering the schedule…</div></main>
   <div class="foot" id="footLine">Made with love for new families.</div>
+  <div class="footlinks" id="footLinks"></div>
 </div>
 <div class="sheet-wrap" id="sheetWrap"><div class="sheet-bg" data-act="close"></div><div class="sheet" role="dialog" aria-modal="true" id="sheet"></div></div>
 <div class="pop-arrow" id="popArrow"></div><div class="pop" id="pop" role="dialog"></div>
@@ -481,8 +485,10 @@ let CATS={},PREP={},PREP_INTRO={},FILTERS=[];
 let mom="Mom";
 // Fill the wording in from this family's settings. Runs whenever settings change.
 function applyFamily(){
-  const st=S.settings;mom=(st.momName||"").trim()||"Mom";
-  const kid=(st.kidName||"").trim(),partner=(st.partnerName||"").trim();
+  // Names go into page text, so strip anything that could become markup.
+  const clean=s=>String(s||"").replace(/[<>]/g,"").trim();
+  const st=S.settings;mom=clean(st.momName)||"Mom";
+  const kid=clean(st.kidName),partner=clean(st.partnerName);
   const wish=`a meal for the freezer, an extra pair of hands, or a little pampering for ${mom}`;
   const V={mom,kid:kid||"the kids",parents:partner?`${mom} or ${partner}`:mom,wishes:kid?`Time with ${kid}, ${wish}`:wish[0].toUpperCase()+wish.slice(1)};
   const fill=s=>typeof s==="string"?s.replace(/\{(\w+)\}/g,(m,k)=>V[k]!==undefined?V[k]:m):s;
@@ -502,6 +508,7 @@ const DEFAULTS={startDate:"",born:false,babyName:"",dueText:"",momName:"",partne
   meals:{enabled:true,types:["dinner"],every:1,dropoff:"Between 4:30 and 6:00 pm",household:"",allergies:"",loves:"",avoid:"",instructions:"Leave it by the front door and send a text — no need to knock."}};
 const TZ=()=>S.settings.tz||Intl.DateTimeFormat().resolvedOptions().timeZone||"America/New_York";
 const fixCat=o=>o;
+const CFGV=()=>window.F40CFG||{business:"",place:"",email:"",apple:false};
 
 /* ---------- utils ---------- */
 const $=s=>document.querySelector(s);
@@ -608,10 +615,16 @@ function makeZip(name,text){
   const end=new DataView(new ArrayBuffer(22));[[0,0x06054b50,4],[4,0,2],[6,0,2],[8,1,2],[10,1,2],[12,cdSize,4],[16,cdOff,4],[20,0,2]].forEach(([o,v,l])=>l===4?end.setUint32(o,v,true):end.setUint16(o,v,true));
   return new Blob([lh,fn,data,ch,fn,end],{type:"application/zip"});
 }
-const icsEsc=t=>String(t||"").replace(/\\/g,"\\\\").replace(/;/g,"\;").replace(/,/g,"\\,").replace(/\r?\n/g,"\\n");
+const icsEsc=t=>String(t||"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\r?\n/g,"\\n");
 function fold(line){const out=[];let cur="",bytes=0;for(const ch of line){const b=new TextEncoder().encode(ch).length;if(bytes+b>73){out.push(cur);cur=" "+ch;bytes=1+b}else{cur+=ch;bytes+=b}}out.push(cur);return out.join("\r\n")}
+// The family's wall-clock time (e.g. 5 pm in New York) as a real moment, so a grandparent
+// in another time zone gets the right time in their calendar.
+function zoned(date,time){try{const tz=TZ(),[y,m,d]=date.split("-").map(Number),[h,mi]=time.split(":").map(Number),want=Date.UTC(y,m-1,d,h,mi);
+  const fmt=new Intl.DateTimeFormat("en-US",{timeZone:tz,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
+  const off=t=>{const p=fmt.formatToParts(new Date(t)),g=k=>+p.find(x=>x.type===k).value;return Date.UTC(g("year"),g("month")-1,g("day"),g("hour")%24,g("minute"))-t};
+  let t=want-off(want);t=want-off(t);return new Date(t)}catch(_){return stamp(date,time)}}
 function vevent(uidv,title,date,start,dur,details,loc){
-  const s=stamp(date,start),e=new Date(s.getTime()+dur*60000),now=new Date();
+  const s=zoned(date,start),e=new Date(s.getTime()+dur*60000),now=new Date();
   const z=d=>`${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
   return["BEGIN:VEVENT","UID:"+uidv+"@first40days","DTSTAMP:"+z(now),"DTSTART:"+z(s),"DTEND:"+z(e),
     "SUMMARY:"+icsEsc(title),details?"DESCRIPTION:"+icsEsc(details):"",loc?"LOCATION:"+icsEsc(loc):"",
@@ -702,6 +715,8 @@ function myCalCard(compact){return"";
 /* ---------- UI bits ---------- */
 function toast(m,ms=2600){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),ms)}
 function openSheet(html){$("#sheet").innerHTML=html;$("#sheetWrap").classList.add("show");document.body.style.overflow="hidden";$("#sheet").scrollTop=0}
+// After signing in, close the sign-in sheet but never the "start your page" form that follows it.
+function closeAuthSheet(){if(!document.querySelector('#sheet [data-form="createfam"]'))closeSheet()}
 function closeSheet(){$("#sheetWrap").classList.remove("show");document.body.style.overflow=""}
 const NAVICONS={
   home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
@@ -713,7 +728,7 @@ const NAVICONS={
 };
 function renderTabs(){
   if(!S.fid){$("#tabs").innerHTML="";return}
-  const tabs=[["home","Home"],["prep","Get Ready"],["schedule","Schedule"],["meals","Meal Train"],["mine","My Shifts"]];
+  const tabs=[["home","Home"],["prep","Get Ready"],["schedule","Schedule"],["meals","Meal Train"],["mine","My Shifts"]].filter(([k])=>k!=="prep"||!S.settings.born||S.tab==="prep");
   if(S.isAdmin)tabs.push(["manage","Manage"]);
   $("#tabs").innerHTML=tabs.map(([k,l])=>`<button class="${S.tab===k?"on":""}" data-act="tab" data-tab="${k}">${NAVICONS[k]}<span>${l}</span></button>`).join("");
 }
@@ -749,7 +764,7 @@ function needRow(n,opts={}){
   else act=`<span class="badge ok">Covered</span>`;
   return`<div class="row c-${c.color} ${open&&!mineClaim?"open":""} ${n.priority?"pri":""}">
    <div class="ico">${c.icon}</div>
-   <div class="rb"><div class="rt">${n.priority?`<span class="badge pri">★ ${esc(mom)}'s priority</span> `:""}${esc(n.title||c.label)}</div>
+   <div class="rb"><div class="rt">${n.priority?`<span class="badge pri">★ Priority</span> `:""}${esc(n.title||c.label)}</div>
     <div class="rm">${when}${spots>1?` · ${cl.length}/${spots} helpers`:""}${who?` · ${who}`:(open?" · needs someone":"")}</div>
     ${n.note?`<div class="rn">${esc(n.note)}</div>`:""}</div>
    <div class="ra">${act}</div></div>`}
@@ -803,7 +818,7 @@ function homeView(){
   const openMeals=mealSlots().filter(s=>s.date>=t&&!mealFor(s.date,s.type)).slice(0,2);
   const soon=allItems().filter(i=>i.date>=t).sort((a,b)=>(a.date+(a.start||"")).localeCompare(b.date+(b.start||""))).slice(0,6);
   const st=S.settings;
-  let h=hero()+installCard(true);
+  let h=hero()+helperHowTo()+installCard(true);
   if(pri.length)h+=`<section><div class="sec-h"><h2>★ ${esc(mom)}'s priorities</h2><span class="aside">What would help most</span></div><div class="stack">${pri.map(n=>needRow(n,{showDate:true})).join("")}</div></section>`;
   h+=`<section><div class="sec-h"><h2>Open requests</h2><button class="linkbtn" data-act="tab" data-tab="schedule">See all</button></div><div class="stack">`+
     (rest.length||openMeals.length?rest.map(n=>needRow(n,{showDate:true})).join("")+openMeals.map(s=>mealOpenRow(s.date,s.type,{showDate:true})).join("")
@@ -974,15 +989,15 @@ function mineView(){
    <div class="field"><label class="lbl">Phone <span class="opt">optional</span></label><input name="pphone" type="tel" value="${esc(me.phone||"")}" placeholder="So ${esc(mom)} can text you"></div></div>
    <div><button class="btn ghost" type="submit">Save</button></div></form></div></section>`;
   return h}
-const APP_VER="multi-family preview · Nov 23";
+const APP_VER="1.0";
 function accountCard(){return accountCard0()+`<p class="small muted" style="text-align:center;margin:6px 0 0">App version ${APP_VER}${S.authUser?(S.authUser.isAnonymous?" · guest":" · "+esc((S.authUser.email||((S.authUser.providerData||[]).find(x=>x&&x.email)||{}).email||"no email")))+(S.isAdmin?" · manager":""):" · not connected"}</p>`}
 function accountCard0(){const u=S.authUser;
-  if(u&&!u.isAnonymous)return`<section><div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Signed in</b><div class="small muted">${esc(u.email||"")}${S.isAdmin?" · can manage this page":""}</div></div><button class="btn ghost sm" data-act="signout">Sign out</button><button class="btn ghost sm" data-act="delacct">Delete account</button>${!u.emailVerified&&S.isAdmin?`<div class="banner warn" style="margin:12px 0 0"><span>✉️</span><div>Confirm your email to manage this page. <button class="linkbtn" data-act="verify">Send the email</button> · <button class="linkbtn" data-act="reloaduser">I've confirmed it</button></div></div>`:""}<details class="other-ways" style="width:100%"><summary>Set or change your password</summary><form novalidate data-form="setpw" class="form" style="margin-top:10px"><div class="field"><input name="pw" type="password" required minlength="6" autocomplete="new-password" placeholder="New password (6+ characters)"></div><button class="btn ghost sm" type="submit">Save password</button></form></details></div></section>`;
+  if(u&&!u.isAnonymous)return`<section><div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>Signed in</b><div class="small muted">${esc(u.email||"")}${S.isAdmin?" · can manage this page":""}</div></div><button class="btn ghost sm" data-act="signout">Sign out</button><button class="btn ghost sm" data-act="delacct">Delete account</button>${!u.emailVerified&&!S.isOwner?`<div class="banner warn" style="margin:12px 0 0;width:100%"><span>✉️</span><div>Did the family add you as a co-manager? Confirm your email to get the Manage tab. <button class="linkbtn" data-act="verify">Send the email</button> · <button class="linkbtn" data-act="reloaduser">I've confirmed it</button></div></div>`:""}<details class="other-ways" style="width:100%"><summary>Set or change your password</summary><form novalidate data-form="setpw" class="form" style="margin-top:10px"><div class="field"><input name="pw" type="password" required minlength="6" autocomplete="new-password" placeholder="New password (6+ characters)"></div><button class="btn ghost sm" type="submit">Save password</button></form></details></div></section>`;
   return`<section><div class="card"><div class="admin-h"><h3>Sign in or create an account</h3></div>
    <p class="small muted" style="margin:-6px 0 12px">Optional. Your email and a password keep your sign-ups with you on any phone, in Safari or the Home Screen app. New here? Just pick a password and we'll make your account.</p>
    ${pwForm()}
    <details class="other-ways"><summary>Other ways to sign in</summary>
-   <div class="calrow" style="margin-top:10px"><button class="btn ghost sm" data-act="apple">Apple</button><button class="btn ghost sm" data-act="google">Google</button><button class="btn ghost sm" data-act="emaillink">Email me a link</button><button class="btn ghost sm" data-act="pastelink">Paste link</button></div></details></div></section>${S.people[S.me.id]?`<p class="small muted" style="text-align:center"><button class="linkbtn small" data-act="delacct">Remove my info from this page</button></p>`:""}`}
+   <div class="calrow" style="margin-top:10px">${CFGV().apple?`<button class="btn ghost sm" data-act="apple">Apple</button>`:""}<button class="btn ghost sm" data-act="google">Google</button><button class="btn ghost sm" data-act="emaillink">Email me a link</button><button class="btn ghost sm" data-act="pastelink">Paste link</button></div></details></div></section>${S.people[S.me.id]?`<p class="small muted" style="text-align:center"><button class="linkbtn small" data-act="delacct">Remove my info from this page</button></p>`:""}`}
 function pwForm(){return`<form novalidate data-form="pw" class="form">
    <div class="field"><label class="lbl">Email</label><input name="email" type="email" required autocomplete="username" placeholder="you@example.com" value="${esc(lsGet2("f40-email"))}"></div>
    <div class="field"><label class="lbl">Password <span class="opt">6 or more characters</span></label><input name="pw" type="password" required minlength="6" autocomplete="current-password"></div>
@@ -997,9 +1012,10 @@ function manageView(){
   const signups=allItems().sort((a,b)=>(a.date+(a.start||"")).localeCompare(b.date+(b.start||""))).filter(i=>i.date>=t);
   const def=upcomingDays()[0];
   let h=`<section><div class="card" style="background:linear-gradient(160deg,#fff,#FFF5F0)"><h2>Hi ${esc(mom)} 💛</h2><p class="muted" style="margin:6px 0 0">Ask for what you need. Mark the things that matter most as <b>priority</b> and they'll show up first for everyone.</p></div></section>`+shareCard();
+  h+=startCard();
   h+=`<section><div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>📅 Family calendar for home</b><div class="small muted">Every helper, meal and open request in one file for Apple Calendar. Download again anytime to update.</div></div><button class="btn primary sm" data-act="icsfamily">${ICON_A} Download for Apple Calendar</button></div></section>`;
   // add request
-  h+=`<section><div class="card"><div class="admin-h"><span class="n">1</span><h3>Ask for help</h3></div>
+  h+=`<section id="set-need"><div class="card"><div class="admin-h"><span class="n">1</span><h3>Ask for help</h3></div>
    <form novalidate data-form="need" class="form">
     <div class="catgrid">${Object.entries(CATS).map(([k,c],ix)=>`<label class="catopt"><input type="radio" name="cat" value="${k}" ${ix===0?"checked":""}><span class="ci">${c.icon}</span><span class="cl">${c.label}</span></label>`).join("")}</div>
     <div class="field"><label class="lbl">What exactly? <span class="opt">optional</span></label><input name="title" placeholder="e.g. Hold the baby so I can nap"></div>
@@ -1015,21 +1031,21 @@ function manageView(){
    (needs.length?needs.map(n=>{const c=catInfo(n.cat);const cl=claimsFor(n);return`<div class="row c-${c.color} ${n.priority?"pri":""}"><div class="ico">${c.icon}</div><div class="rb"><div class="rt">${esc(n.title||c.label)}</div><div class="rm">${fmtDate(n.date)} · ${fmtRange(n.start,n.dur)} · ${cl.length?cl.map(x=>esc(nameOf(x.uid))).join(", "):"open"}</div></div>
     <div class="ra"><button class="iconbtn ${n.priority?"on":""}" data-act="pri" data-id="${esc(n.id)}" title="Toggle priority">★</button><button class="iconbtn" data-act="delneed" data-id="${esc(n.id)}" title="Remove">🗑</button></div></div>`}).join(""):`<div class="empty">No requests yet. Add one above.</div>`)+`</div></section>`;
   // dates & family
-  h+=`<section><div class="card"><div class="admin-h"><span class="n">2</span><h3>Dates & family</h3></div>
+  h+=`<section id="set-family"><div class="card"><div class="admin-h"><span class="n">2</span><h3>Dates & family</h3></div>
    <form novalidate data-form="settings" class="form">
     <div class="two"><div class="field"><label class="lbl">Baby's arrival (or due) date</label><input type="date" name="startDate" value="${esc(st.startDate)}"></div><div class="field"><label class="lbl">Baby's name <span class="opt">optional</span></label><input name="babyName" value="${esc(st.babyName)}" placeholder="When you're ready to share"></div></div>
     <div class="field"><label class="lbl">How to say when baby is due <span class="opt">optional · e.g. around Christmas</span></label><input name="dueText" maxlength="60" value="${esc(st.dueText||"")}" placeholder="around Christmas"><small class="small muted" style="display:block;margin-top:6px">If you fill this in, helpers see these words instead of the exact date and a countdown. The date above still sets up the calendar.</small></div>
     <label class="toggle"><input type="checkbox" name="born" ${st.born?"checked":""}><div><b>Baby has arrived</b><small>Day 1 is the birthday — the 40 days count from there</small></div></label>
     <div class="two"><div class="field"><label class="lbl">New mom's first name</label><input name="momName" required maxlength="40" value="${esc(st.momName)}"></div><div class="field"><label class="lbl">Partner <span class="opt">optional</span></label><input name="partnerName" maxlength="40" value="${esc(st.partnerName)}"></div></div>
     <div class="field"><label class="lbl">Big brothers or sisters <span class="opt">optional</span></label><input name="kidName" maxlength="60" value="${esc(st.kidName)}" placeholder="e.g. Theo, or Theo & Ava"></div>
-    <div class="field"><label class="lbl">Family line under the title</label><input name="family" value="${esc(st.family)}"></div>
+    <div class="field"><label class="lbl">Subtitle under the page title <span class="opt">optional</span></label><input name="family" value="${esc(st.family)}"></div>
     <div class="field"><label class="lbl">Welcome message</label><textarea name="welcome" rows="2" placeholder="A note to everyone helping">${esc(st.welcome)}</textarea></div>
     <div class="field"><label class="lbl">Address <span class="opt">shown to helpers & added to calendar invites</span></label><input name="address" value="${esc(st.address)}"></div>
     <div class="field"><label class="lbl">Before-you-visit notes <span class="opt">one per line</span></label><textarea name="visitNotes" rows="4">${esc(st.visitNotes)}</textarea></div>
     ${st.kidName?`<div class="field"><label class="lbl">🧸 ${esc(st.kidName)}'s routine</label><textarea name="kidNotes" rows="3" placeholder="Nap times, favorite snacks, favorite park, bedtime…">${esc(st.kidNotes)}</textarea></div>`:""}
     <button class="btn primary block" type="submit">Save</button></form></div></section>`;
   // meals settings
-  h+=`<section><div class="card"><div class="admin-h"><span class="n">3</span><h3>Meal train</h3></div>
+  h+=`<section id="set-meals"><div class="card"><div class="admin-h"><span class="n">3</span><h3>Meal train</h3></div>
    <form novalidate data-form="meals" class="form">
     <label class="toggle"><input type="checkbox" name="enabled" ${m.enabled?"checked":""}><div><b>Meal train is on</b><small>People can sign up to bring meals</small></div></label>
     <div><label class="lbl">Which meals?</label><div class="durs">${Object.entries(MEALTYPES).map(([k,l])=>`<label><input type="checkbox" name="types" value="${k}" ${(m.types||[]).includes(k)?"checked":""}><span>${l}</span></label>`).join("")}</div></div>
@@ -1041,7 +1057,7 @@ function manageView(){
     <div class="field"><label class="lbl">How to drop off</label><textarea name="instructions" rows="2">${esc(m.instructions)}</textarea></div>
     <button class="btn primary block" type="submit">Save meal train</button></form></div></section>`;
   // admins
-  h+=`<section><div class="card"><div class="admin-h"><span class="n">4</span><h3>Who can manage this</h3></div>
+  h+=`<section id="set-admins"><div class="card"><div class="admin-h"><span class="n">4</span><h3>Who can manage this</h3></div>
    <p class="small muted" style="margin:-6px 0 10px">Add someone's email (your partner, a sister, your doula) and they'll get this tab after signing in with that email.</p>
    <div class="stack"><div class="row" style="padding:10px 12px"><div class="rb"><div class="rt" style="font-size:14.5px">${S.isOwner?esc(signedInEmail(S.authUser)||"You"):"The person who started this page"}</div></div><span class="badge ok">Owner</span></div>
    ${S.admins.filter(e=>!(S.isOwner&&e===signedInEmail(S.authUser))).map(e=>`<div class="row" style="padding:10px 12px"><div class="rb"><div class="rt" style="font-size:14.5px">${esc(e)}</div></div><button class="iconbtn" data-act="rmadmin" data-email="${esc(e)}" title="Remove">🗑</button></div>`).join("")}</div>
@@ -1086,6 +1102,7 @@ function render(){
   renderTabs();renderBanners();
   $("#familyLine").textContent=S.settings.family||(S.fid?`A circle of care for ${mom} & family`:"A circle of care for the first 40 days");$("#footLine").textContent=S.fid?`Made with love for ${mom} & family.`:"Made with love for new families.";
   document.body.classList.toggle("landing",!S.fid);
+  {const c=CFGV();$("#footLinks").innerHTML=`<a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a>${c.email?` · <a href="mailto:${esc(c.email)}">Contact us</a>`:""}`}
   if(!S.fid){$("#main").innerHTML=S.live?landingView():`<div class="loading"><div class="spin"></div>Loading…</div>`;return}
   if(S.missing){$("#main").innerHTML=`<section><div class="card"><h2>We couldn't find that page</h2><p class="muted">The link may be mistyped, or the family may have taken their page down. Ask whoever sent it for the link again.</p><div class="cta"><button class="btn ghost" data-act="landing">Go to the start</button></div></div></section>`;return}
   if(S.live&&!(S.loaded.s&&S.loaded.n&&S.loaded.p&&S.loaded.f)&&!S.stale){$("#main").innerHTML=`<div class="loading"><div class="spin"></div>Gathering the schedule…</div>`;return}
@@ -1147,12 +1164,15 @@ function showCopy(txt){openSheet(sheetHead("Copy this","Select the text and copy
 document.addEventListener("click",async e=>{
   const a=e.target.closest("[data-act]");if(!e.target.closest("#pop")&&!(a&&(a.dataset.act==="selday"||a.dataset.act==="mealday"||a.dataset.act==="myday"||a.dataset.act==="anotherday")))closePop();if(!a)return;const act=a.dataset.act;if(a.closest("#pop")&&act!=="closepop")closePop();
   if(act==="close"){closeSheet();return}
+  if(act==="jump"){const el=document.getElementById(a.dataset.to);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});return}
+  if(act==="hidesetup"){try{localStorage.setItem("f40-setup-hide-"+S.fid,"1")}catch(_){}render();return}
+  if(act==="hidehowto"){try{localStorage.setItem("f40-howto-seen","1")}catch(_){}render();return}
   if(act==="landing"){e.preventDefault();closeSheet();goLanding();return}
   if(act==="startfam"){if(S.authUser&&!S.authUser.isAnonymous)createSheet();else signInFirst();return}
-  if(act==="apple"){try{await FB.auth.apple();await onUser(FB.auth.current());if(!S.pendingCreate)closeSheet();toast("Signed in")}catch(e){if(e&&e.code!=="auth/popup-closed-by-user")toast("Apple sign-in didn't finish ("+(e.code||"error")+"). Try email and password instead.",4500)}return}
+  if(act==="apple"){try{await FB.auth.apple();await onUser(FB.auth.current());closeAuthSheet();toast("Signed in")}catch(e){if(e&&e.code!=="auth/popup-closed-by-user")toast("Apple sign-in didn't finish ("+(e.code||"error")+"). Try email and password instead.",4500)}return}
   if(act==="share"){shareSheet(false);return}
-  if(act==="sharenow"){try{await navigator.share({title:"The First 40 Days",text:shareText(),url:inviteLink()})}catch(_){}return}
-  if(act==="copyinvite"){copyText(shareText()+" "+inviteLink(),"Link copied — paste it in a text or email");return}
+  if(act==="sharenow"){markShared();try{await navigator.share({title:"The First 40 Days",text:shareText(),url:inviteLink()})}catch(_){}return}
+  if(act==="copyinvite"){markShared();copyText(shareText()+" "+inviteLink(),"Link copied — paste it in a text or email");return}
   if(act==="delfam"){openSheet(sheetHead("Delete this page for good?","This can't be undone.")+`<p class="muted">Every request, sign-up and phone number on this page will be erased, and the link will stop working.</p><form novalidate data-form="delfam" class="form"><div class="field"><label class="lbl">Type DELETE to confirm</label><input name="confirm" required autocomplete="off"></div><button class="btn primary block" type="submit">Delete the page</button></form>`);return}
   if(act==="delacct"){const anon=S.authUser&&S.authUser.isAnonymous;openSheet(sheetHead(anon?"Remove your info?":"Delete your account?","This can't be undone.")+`<p class="muted">${S.fid?"Your sign-ups and phone number on this page will be removed. ":""}${anon?"":"Your account and email will be deleted. "}${!anon?"If you started any family pages, delete those first from their Manage tab.":""}</p><div class="calrow"><button class="btn primary" data-act="dodelacct">${anon?"Remove my info":"Delete my account"}</button><button class="btn ghost" data-act="close">Keep it</button></div>`);return}
   if(act==="dodelacct"){const u=S.authUser;if(!u)return;
@@ -1171,7 +1191,7 @@ document.addEventListener("click",async e=>{
   if(act==="reloaduser"){try{const u=await FB.auth.reload();await onUser(u);toast(u&&u.emailVerified?"Email confirmed 💛":"Not confirmed yet — check your email")}catch(e){toast(authMsg(e))}return}
   if(act==="fillname"){const f=a.closest("form");if(f&&f.pname){f.pname.value=a.dataset.name;f.pname.classList.remove("err")}return}
   if(act==="iam"){if(!guardWrite())return;const n=a.dataset.name;try{await saveMine(d=>{d.name=n;return d});lsSet(n);toast(`Welcome back, ${n} 💛`)}catch(_){}return}
-  if(act==="google"){try{await FB.auth.google();await onUser(FB.auth.current());if(!S.pendingCreate)closeSheet();toast("Signed in")}catch(e){if(e&&e.code!=="auth/popup-closed-by-user")toast("Google sign-in didn't finish. On the Home Screen app, use Sign in with email link instead.")}return}
+  if(act==="google"){try{await FB.auth.google();await onUser(FB.auth.current());closeAuthSheet();toast("Signed in")}catch(e){if(e&&e.code!=="auth/popup-closed-by-user")toast("Google sign-in didn't finish. On the Home Screen app, use Sign in with email link instead.")}return}
   if(act==="emaillink"){openSheet(sheetHead("Sign in with email","We'll email you a sign-in link — no password.")+`<form novalidate data-form="sendlink" class="form"><div class="field"><label class="lbl">Your email</label><input name="email" type="email" required placeholder="you@example.com" autocomplete="email"></div><button class="btn primary block" type="submit">Email me a link</button></form>`);return}
   if(act==="pastelink"){openSheet(sheetHead("Paste your sign-in link","Press and hold the link in the email, tap Copy Link, then paste it here.")+`<form novalidate data-form="pastelink" class="form"><div class="field"><input name="link" type="url" required placeholder="https://…"></div><button class="btn primary block" type="submit">Sign in</button></form>`);return}
   if(act==="signout"){await FB.auth.signOut();S.myFamilies=null;toast("Signed out");return}
@@ -1234,7 +1254,7 @@ document.addEventListener("submit",async e=>{
       try{await wipeFamily(fid);forget(fid);closeSheet();toast("Your page is deleted");goLanding()}catch(e){handleErr(e)}return}
     if(kind==="pastelink"){const l=String(fd.get("link")||"").trim();closeSheet();try{const ok=await FB.auth.finishLink(askEmail,l);if(!ok){toast("That doesn't look like the sign-in link — copy it from the email again.");return}await onUser(FB.auth.current());toast("You're signed in 💛");render()}catch(e){console.warn(e);toast("That link didn't work — it may have expired. Send a new one.")}return}
     if(kind==="pw"){const em=String(fd.get("email")||"").trim(),pw=String(fd.get("pw")||"");try{localStorage.setItem("f40-email",em)}catch(_){}
-      try{const r=await FB.auth.password(em,pw);await onUser(FB.auth.current());closeSheet();
+      try{const r=await FB.auth.password(em,pw);await onUser(FB.auth.current());closeAuthSheet();
         if(r.created&&S.admins.includes(em.toLowerCase())){try{await FB.auth.verify()}catch(_){}}
         toast(r.created?"Account made — you're all set 💛":"You're signed in 💛",3500);render()}
       catch(e){toast(authMsg(e),5000)}return}
@@ -1260,6 +1280,7 @@ document.addEventListener("submit",async e=>{
       const from=fd.get("date"),until=fd.get("until"),rep=fd.get("repeat");let ds=[from];
       if(rep!=="once"){ds=[];for(let d=from,i=0;d<=until&&i<40;d=addDays(d,1),i++){const wd=parse(d).getDay();
         if(rep==="daily"||(rep==="alt"&&i%2===0)||(rep==="weekdays"&&wd>0&&wd<6)||(rep==="weekly"&&i%7===0))ds.push(d)}}
+      if(!ds.length){toast("Pick an end date after the start date.",3500);return}
       for(const d of ds)await store.setNeed({id:uid(),...base,date:d,at:Date.now()});
       f.reset();toast(ds.length>1?`Posted ${ds.length} requests`:"Request posted")}
   }catch(err){if(!(err&&err._shown)){console.warn(err);toast("Something went wrong"+(err&&err.code?" ("+err.code+")":"")+" — please try again.",4500)}}finally{if(btn){btn.disabled=false;if(label)btn.textContent=label}}
@@ -1297,12 +1318,12 @@ function landingView(){
   else h+=`<p class="small muted" style="text-align:center;margin-top:18px">Started a page before? <button class="linkbtn" data-act="acctsheet">Sign in</button> to find it.</p>`;
   return h}
 function signInFirst(){S.pendingCreate=true;openSheet(sheetHead("First, make your account","So you can come back and manage your page from any phone.")+
-  `<div class="calrow" style="margin-bottom:14px"><button class="btn ghost" data-act="apple">${ICON_A} Sign in with Apple</button><button class="btn ghost" data-act="google">Google</button></div>`+pwForm())}
+  `<div class="calrow" style="margin-bottom:14px">${CFGV().apple?`<button class="btn ghost" data-act="apple">${ICON_A} Sign in with Apple</button>`:""}<button class="btn ghost" data-act="google">Continue with Google</button></div><div class="dm-sub" style="margin:0 2px 10px">Or use your email</div>`+pwForm())}
 function createSheet(){S.pendingCreate=false;
   openSheet(sheetHead("Start your family's page","You can change any of this later.")+`<form novalidate data-form="createfam" class="form">
    <div class="two"><div class="field"><label class="lbl">New mom's first name</label><input name="momName" required maxlength="40" placeholder="e.g. Maya"></div>
    <div class="field"><label class="lbl">Partner <span class="opt">optional</span></label><input name="partnerName" maxlength="40" placeholder="e.g. Sam"></div></div>
-   <div class="field"><label class="lbl">Big brothers or sisters <span class="opt">optional</span></label><input name="kidName" maxlength="60" placeholder="e.g. Theo, or Theo & Ava"><small class="small muted" style="display:block;margin-top:6px">Adds "Time with Theo" as a way to help.</small></div>
+   <div class="field"><label class="lbl">Big brothers or sisters <span class="opt">optional</span></label><input name="kidName" maxlength="60" placeholder="e.g. Theo, or Theo & Ava"><small class="small muted" style="display:block;margin-top:6px">Adds "time with the big kids" as a way people can help.</small></div>
    <div class="field"><label class="lbl">Due date or birthday <span class="opt">optional</span></label><input type="date" name="startDate"></div>
    <label class="toggle"><input type="checkbox" name="born"><div><b>Baby has arrived</b><small>The 40 days count from the birthday</small></div></label>
    <div class="field"><label class="lbl">⚠️ Food allergies <span class="opt">optional</span></label><input name="allergies" maxlength="300" placeholder="e.g. no peanuts or tree nuts"></div>
@@ -1318,13 +1339,30 @@ async function createFamily(fd){
   await S.db.doc(`families/${fid}/settings/main`).set(st);
   remember(fid,name);history.pushState(null,"","?f="+encodeURIComponent(fid));S.justCreated=true;S.tab="manage";openFamily(fid);closeSheet();
   setTimeout(()=>shareSheet(true),400)}
-function shareText(){return`We're using The First 40 Days to organize help after the baby comes. Sign up for a meal or a time to help here:`}
+function markShared(){try{localStorage.setItem("f40-shared-"+S.fid,"1")}catch(_){}setTimeout(render,300)}
+function shareText(){return S.settings.born?`We're using The First 40 Days to organize help with the new baby. Sign up to bring a meal or lend a hand here:`:`We're using The First 40 Days to organize help for when the baby comes. Sign up to bring a meal or lend a hand here:`}
 function shareSheet(first){const link=inviteLink();
   openSheet(sheetHead(first?"Your page is ready 💛":"Invite your people",first?"Send this link to the family and friends you'd like to help.":"Anyone with this link can see the schedule and sign up.")+
    `<div class="field"><input readonly value="${esc(link)}" onclick="this.select()"></div>
    <div class="calrow" style="margin-top:12px">${navigator.share?`<button class="btn primary" data-act="sharenow">Share the link</button>`:""}<button class="btn ${navigator.share?"ghost":"primary"}" data-act="copyinvite">Copy the link</button></div>
    <p class="small muted" style="margin-top:14px">Only share it with people you trust: the link shows your schedule and the address you add. Phone numbers stay private to you.</p>`)}
 function shareCard(){return`<section><div class="card subcard" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="font-size:28px">🔗</div><div style="flex:1;min-width:200px"><b>Invite your people</b><div class="small muted">Send your page's link by text, email or the family group chat.</div></div><button class="btn primary sm" data-act="share">Share link</button></div></section>`}
+// First-week checklist for a new page. Disappears once everything's done (or when dismissed).
+function startCard(){const fid=S.fid,st=S.settings;if(!S.isAdmin||lsFlag("f40-setup-hide-"+fid))return"";
+  const steps=[[lsFlag("f40-shared-"+fid),"Send your link to family and friends","share",""],
+    [!!(st.startDate||String(st.dueText||"").trim()),"Add the due date or birthday","jump","set-family"],
+    [!!String(st.address||"").trim(),"Add your address so helpers know where to go","jump","set-family"],
+    [S.needs.length>0,"Ask for your first bit of help","jump","set-need"]];
+  const left=steps.filter(x=>!x[0]).length;if(!left)return"";
+  return`<section><div class="card subcard" style="position:relative"><button class="x" data-act="hidesetup" aria-label="Hide" style="position:absolute;top:10px;right:10px;width:28px;height:28px;font-size:16px">×</button>
+   <b style="font-size:17px">Getting started</b><div class="small muted" style="margin:2px 0 10px">${left} quick thing${left===1?"":"s"} left</div>
+   <div class="stack">${steps.map(([ok,t,act,to])=>`<button class="syncopt" style="margin:0;padding:11px 14px" data-act="${ok?"":act}" data-to="${to}" ${ok?"disabled":""}><span style="font-size:20px;flex:none">${ok?"✅":"⬜️"}</span><span style="flex:1;${ok?"text-decoration:line-through;color:var(--muted)":""}">${t}</span>${ok?"":`<span class="linkbtn">Go ›</span>`}</button>`).join("")}</div></div></section>`}
+function helperHowTo(){if(S.isAdmin||lsFlag("f40-howto-seen")||myAll().length)return"";
+  return`<section><div class="card" style="position:relative;padding-right:44px"><button class="x" data-act="hidehowto" aria-label="Got it" style="position:absolute;top:10px;right:10px;width:28px;height:28px;font-size:16px">×</button>
+   <b style="font-size:17px">How to help · no account needed</b><ul class="tips" style="margin-top:6px">
+   <li><span>1</span><div>Tap anything marked <b>open</b>, or tap <b>Offer help</b> to pick your own time.</div></li>
+   <li><span>2</span><div>Type your name and tap <b>Sign me up</b>.</div></li>
+   <li><span>3</span><div>Add it to your calendar so you don't forget. Your sign-ups are always under <b>My Shifts</b>.</div></li></ul></div></section>`}
 function dangerCard(){if(!S.isOwner)return"";return`<section><div class="card"><div class="admin-h"><h3>Delete this page</h3></div><p class="small muted" style="margin:-6px 0 12px">Removes the schedule, every sign-up and all phone numbers for good. Helpers' links stop working.</p><button class="btn ghost" data-act="delfam">Delete this family page</button></div></section>`}
 async function wipeFamily(fid){for(const c of["needs","people","contacts","admins","settings"]){const q=await S.db.collection(`families/${fid}/${c}`).get();for(const d of q.docs)await S.db.doc(`families/${fid}/${c}/${d.id}`).delete()}await S.db.doc("families/"+fid).delete()}
 async function removeMeFromFamily(){if(!S.fid||!S.me.id)return;try{await S.db.doc(P("people/"+S.me.id)).delete()}catch(e){console.warn(e)}try{await S.db.doc(P("contacts/"+S.me.id)).delete()}catch(e){console.warn(e)}}
